@@ -17,8 +17,10 @@ import { renderPlayerHeader } from "../ui/render-player-header"
 import { renderScorePanel } from "../ui/render-score-panel"
 
 export const startGame = (state: AppState, players: LobbyPlayer[], selfId: string) => {
+  state.gameCleanup?.()
   cancelAnimationFrame(state.animationFrame)
   state.keyboard?.destroy()
+  state.keyboard = undefined
 
   state.activeGame = {
     selfId,
@@ -108,6 +110,13 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
 
   const onResize = () => resizeCanvas(canvas, context)
   window.addEventListener("resize", onResize)
+  state.gameCleanup = () => {
+    window.removeEventListener("resize", onResize)
+    cancelAnimationFrame(state.animationFrame)
+    state.keyboard?.destroy()
+    state.keyboard = undefined
+    state.gameCleanup = undefined
+  }
   onResize()
 
   const createRespawnShip = () => {

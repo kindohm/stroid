@@ -25,6 +25,7 @@ export type AppState = {
   incomingProjectiles: Projectile[]
   incomingExplosions: RenderExplosion[]
   hiddenPlayerIds: Set<string>
+  gameCleanup?: () => void
   activeGame?: ActiveGame
 }
 

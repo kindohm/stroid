@@ -24,8 +24,10 @@ const asteroidExplosionColorBySize = {
 }
 
 export const renderLobby = (state: AppState) => {
+  state.gameCleanup?.()
   cancelAnimationFrame(state.animationFrame)
   state.keyboard?.destroy()
+  state.keyboard = undefined
   state.lobbyConnection?.destroy()
 
   const directSlug = getRouteLobbySlug()

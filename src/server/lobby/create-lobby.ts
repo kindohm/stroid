@@ -1,16 +1,10 @@
 import { randomUUID } from "node:crypto"
 import type { WebSocket } from "ws"
 import { assignPlayerColor } from "../../game/assign-player-color"
-import { createBorderAsteroid } from "../../game/create-border-asteroid"
-import { getAsteroidSpawnTarget } from "../../game/get-asteroid-spawn-target"
-import { getAsteroidSpeedMultiplier } from "../../game/get-asteroid-speed-multiplier"
-import { splitAsteroid } from "../../game/split-asteroid"
-import { updateAsteroids } from "../../game/update-asteroids"
 import { gameConfig } from "../../shared/game-config"
-import type { Asteroid, AsteroidSize, GameWorld } from "../../shared/game-types"
+import type { Asteroid, AsteroidSize } from "../../shared/game-types"
 import type {
   AsteroidNamePools,
-  AsteroidNameSize,
   AsteroidStatsState,
   ClientLobbyMessage,
   LifeState,
@@ -20,6 +14,9 @@ import type {
   ScoreState,
   ServerLobbyMessage
 } from "../../shared/lobby-types"
+import { asteroidNameSizeByAsteroidSize } from "./asteroid-name-size-by-asteroid-size"
+import { createLobbyAsteroids } from "./create-lobby-asteroids"
+import { createLobbyBroadcaster } from "./create-lobby-broadcaster"
 import { defaultAsteroidNames } from "./default-asteroid-names"
 import type { LobbyClient } from "./lobby-client"
 import { parseClientMessage } from "./parse-client-message"
@@ -32,21 +29,11 @@ type LobbyArgs = {
   onEmpty?: (slug: string) => void
 }
 
-const world: GameWorld = {
-  width: gameConfig.mapTilesWide * gameConfig.tileSize,
-  height: gameConfig.mapTilesTall * gameConfig.tileSize
-}
 const asteroidScoreBySize: Record<AsteroidSize, number> = {
   extraLarge: 100,
   large: 100,
   medium: 200,
   small: 300
-}
-const nameSizeByAsteroidSize: Record<AsteroidSize, AsteroidNameSize> = {
-  extraLarge: "extraLarge",
-  large: "large",
-  medium: "medium",
-  small: "small"
 }
 
 export const createLobby = ({
@@ -56,48 +43,14 @@ export const createLobby = ({
   onEmpty
 }: Partial<LobbyArgs> = {}) => {
   const clients = new Map<string, LobbyClient>()
+  const broadcaster = createLobbyBroadcaster({ clients })
   let hostClientId = hostId
-  let asteroids: Asteroid[] = []
-  let asteroidsSpawned = 0
-  let asteroidsDestroyed = 0
-  let asteroidId = 0
-  let asteroidInterval: ReturnType<typeof setInterval> | undefined
-  let lastAsteroidTick = Date.now()
   const scoresByClientId = new Map<string, number>()
   const livesByClientId = new Map<string, number>()
   const asteroidStatsByClientId = new Map<string, PlayerAsteroidStats>()
   let asteroidNames = defaultAsteroidNames
   let gameInProgress = false
   let gameOver = false
-
-  const createAsteroidId = () => {
-    asteroidId += 1
-    return `asteroid-${asteroidId}`
-  }
-
-  const nameAsteroid = (asteroid: Asteroid): Asteroid => {
-    const names = asteroidNames[nameSizeByAsteroidSize[asteroid.size]]
-    const name = names[Math.floor(Math.random() * names.length)]
-
-    return {
-      ...asteroid,
-      name
-    }
-  }
-
-  const createAsteroid = () => {
-    const speedMultiplier = getAsteroidSpeedMultiplier(asteroidsSpawned, asteroidsDestroyed)
-    asteroidsSpawned += 1
-    return nameAsteroid(createBorderAsteroid(createAsteroidId(), world, Math.random, speedMultiplier))
-  }
-
-  const fillAsteroidTarget = () => {
-    const target = getAsteroidSpawnTarget(asteroidsSpawned, asteroidsDestroyed)
-
-    while (asteroids.length < target) {
-      asteroids = [...asteroids, createAsteroid()]
-    }
-  }
 
   const getPlayers = (): LobbyPlayer[] =>
     [...clients.values()]
@@ -169,7 +122,7 @@ export const createLobby = ({
       return
     }
 
-    const size = nameSizeByAsteroidSize[asteroid.size]
+    const size = asteroidNameSizeByAsteroidSize[asteroid.size]
     const stats = asteroidStatsByClientId.get(client.id) ?? createEmptyAsteroidStats(player)
     const name = asteroid.name ?? "unnamed"
 
@@ -205,43 +158,25 @@ export const createLobby = ({
   }
 
   const broadcastScoreState = () => {
-    const message: ServerLobbyMessage = {
+    broadcaster.sendToJoined({
       type: "scoreState",
       scores: getScoreState()
-    }
-
-    clients.forEach((client) => {
-      if (client.username) {
-        sendMessage(client, message)
-      }
     })
   }
 
   const broadcastLifeState = () => {
-    const message: ServerLobbyMessage = {
+    broadcaster.sendToJoined({
       type: "lifeState",
       lives: getLifeState()
-    }
-
-    clients.forEach((client) => {
-      if (client.username) {
-        sendMessage(client, message)
-      }
     })
   }
 
   const broadcastGameOver = () => {
-    const message: ServerLobbyMessage = {
+    broadcaster.sendToJoined({
       type: "gameOver",
       scores: getScoreState(),
       lives: getLifeState(),
       asteroidStats: getAsteroidStatsState()
-    }
-
-    clients.forEach((client) => {
-      if (client.username) {
-        sendMessage(client, message)
-      }
     })
   }
 
@@ -250,53 +185,17 @@ export const createLobby = ({
     onChanged?.()
   }
 
-  const broadcastAsteroidState = () => {
-    const message: ServerLobbyMessage = {
+  const broadcastAsteroidState = (asteroids: Asteroid[]) => {
+    broadcaster.sendToJoined({
       type: "asteroidState",
       asteroids
-    }
-
-    clients.forEach((client) => {
-      if (client.username) {
-        sendMessage(client, message)
-      }
     })
   }
 
-  const startAsteroids = () => {
-    fillAsteroidTarget()
-    broadcastAsteroidState()
-
-    if (asteroidInterval) {
-      return
-    }
-
-    lastAsteroidTick = Date.now()
-    asteroidInterval = setInterval(() => {
-      const now = Date.now()
-      const deltaSeconds = Math.min(0.1, (now - lastAsteroidTick) / 1000)
-      lastAsteroidTick = now
-      asteroids = updateAsteroids(asteroids, deltaSeconds, world)
-      fillAsteroidTarget()
-      broadcastAsteroidState()
-    }, gameConfig.asteroidStateBroadcastIntervalMs)
-  }
-
-  const stopAsteroids = () => {
-    if (asteroidInterval) {
-      clearInterval(asteroidInterval)
-      asteroidInterval = undefined
-    }
-  }
-
-  const resetAsteroids = () => {
-    stopAsteroids()
-    asteroids = []
-    asteroidsSpawned = 0
-    asteroidsDestroyed = 0
-    asteroidId = 0
-    lastAsteroidTick = Date.now()
-  }
+  const lobbyAsteroids = createLobbyAsteroids({
+    getAsteroidNames: () => asteroidNames,
+    onChanged: broadcastAsteroidState
+  })
 
   const sendGameStarted = (client: LobbyClient) => {
     if (!client.username) {
@@ -325,8 +224,8 @@ export const createLobby = ({
     })
     gameInProgress = true
     gameOver = false
-    resetAsteroids()
-    startAsteroids()
+    lobbyAsteroids.reset()
+    lobbyAsteroids.start()
     clients.forEach(sendGameStarted)
     broadcastScoreState()
     broadcastLifeState()
@@ -343,11 +242,7 @@ export const createLobby = ({
       ship
     }
 
-    clients.forEach((nextClient) => {
-      if (nextClient.id !== client.id && nextClient.username) {
-        sendMessage(nextClient, message)
-      }
-    })
+    broadcaster.sendToJoinedExcept(message, client.id)
   }
 
   const handlePlayerHit = (
@@ -373,7 +268,7 @@ export const createLobby = ({
     if (players.length > 0 && players.every((player) => player.isEliminated)) {
       gameOver = true
       gameInProgress = false
-      stopAsteroids()
+      lobbyAsteroids.stop()
       broadcastGameOver()
       onChanged?.()
     }
@@ -384,7 +279,7 @@ export const createLobby = ({
       return
     }
 
-    const asteroid = asteroids.find((nextAsteroid) => nextAsteroid.id === asteroidIdToHit)
+    const asteroid = lobbyAsteroids.destroy(asteroidIdToHit)
 
     if (!asteroid) {
       return
@@ -405,24 +300,9 @@ export const createLobby = ({
     }
 
     recordAsteroidDestroyed(client, asteroid)
-    asteroids = asteroids.filter((nextAsteroid) => nextAsteroid.id !== asteroidIdToHit)
-    asteroidsDestroyed += 1
-    const children = splitAsteroid(
-      asteroid,
-      createAsteroidId,
-      Math.random,
-      getAsteroidSpeedMultiplier(asteroidsSpawned, asteroidsDestroyed)
-    ).map(nameAsteroid)
-    asteroidsSpawned += children.length
-    asteroids = [...asteroids, ...children]
-    fillAsteroidTarget()
-    clients.forEach((nextClient) => {
-      if (nextClient.username) {
-        sendMessage(nextClient, destroyedMessage)
-      }
-    })
+    broadcaster.sendToJoined(destroyedMessage)
     broadcastScoreState()
-    broadcastAsteroidState()
+    broadcastAsteroidState(lobbyAsteroids.getAsteroids())
   }
 
   const broadcastPlayerState = (
@@ -435,11 +315,7 @@ export const createLobby = ({
       ship
     }
 
-    clients.forEach((nextClient) => {
-      if (nextClient.id !== client.id && nextClient.username) {
-        sendMessage(nextClient, message)
-      }
-    })
+    broadcaster.sendToJoinedExcept(message, client.id)
   }
 
   const broadcastProjectileFired = (
@@ -452,11 +328,7 @@ export const createLobby = ({
       projectile
     }
 
-    clients.forEach((nextClient) => {
-      if (nextClient.id !== client.id && nextClient.username) {
-        sendMessage(nextClient, message)
-      }
-    })
+    broadcaster.sendToJoinedExcept(message, client.id)
   }
 
   const removeClient = (client: LobbyClient) => {
@@ -466,7 +338,7 @@ export const createLobby = ({
     broadcastLifeState()
 
     if (clients.size === 0) {
-      stopAsteroids()
+      lobbyAsteroids.stop()
       onEmpty?.(slug)
     }
   }
@@ -580,6 +452,6 @@ export const createLobby = ({
     hasClient: (clientId: string) => clients.has(clientId),
     isJoinable: () => !gameInProgress,
     removeClient,
-    stop: stopAsteroids
+    stop: lobbyAsteroids.stop
   }
 }
