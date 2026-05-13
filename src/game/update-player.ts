@@ -3,6 +3,14 @@ import type { GameWorld, PlayerInput, PlayerShip, Vector } from "../shared/game-
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 
+const bounceVelocity = (velocity: number, nextPosition: number, position: number) => {
+  if (position !== nextPosition) {
+    return -velocity * gameConfig.wallBounceVelocityRetained
+  }
+
+  return velocity
+}
+
 const clampToSpeed = (velocity: Vector, maxSpeed: number): Vector => {
   const speed = Math.hypot(velocity.x, velocity.y)
 
@@ -52,8 +60,8 @@ export const updatePlayer = (
   return {
     position,
     velocity: {
-      x: position.x === nextPosition.x ? velocity.x : 0,
-      y: position.y === nextPosition.y ? velocity.y : 0
+      x: bounceVelocity(velocity.x, nextPosition.x, position.x),
+      y: bounceVelocity(velocity.y, nextPosition.y, position.y)
     },
     angle
   }

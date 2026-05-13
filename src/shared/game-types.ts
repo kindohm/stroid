@@ -34,6 +34,7 @@ export type AsteroidSize = "small" | "medium" | "large" | "extraLarge"
 
 export type Asteroid = {
   id: string
+  name?: string
   position: Vector
   velocity: Vector
   size: AsteroidSize

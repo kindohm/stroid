@@ -62,7 +62,7 @@ describe("updatePlayer", () => {
     expect(updated.position.y).toBeGreaterThan(player.position.y)
   })
 
-  it("keeps the ship inside the map", () => {
+  it("bounces off the map edge", () => {
     const player = createPlayer({
       position: {
         x: 4,
@@ -77,7 +77,9 @@ describe("updatePlayer", () => {
 
     expect(updated.position.x).toBe(gameConfig.shipRadius)
     expect(updated.position.y).toBe(gameConfig.shipRadius)
-    expect(updated.velocity.x).toBe(0)
-    expect(updated.velocity.y).toBe(0)
+    expect(updated.velocity.x).toBeGreaterThan(0)
+    expect(updated.velocity.y).toBeGreaterThan(0)
+    expect(updated.velocity.x).toBeCloseTo(1000 * (1 - gameConfig.dragPerSecond) * gameConfig.wallBounceVelocityRetained)
+    expect(updated.velocity.y).toBeCloseTo(1000 * (1 - gameConfig.dragPerSecond) * gameConfig.wallBounceVelocityRetained)
   })
 })

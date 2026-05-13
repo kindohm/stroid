@@ -111,6 +111,7 @@ describe("renderGame", () => {
       players: [renderPlayer],
       projectiles: [],
       asteroids: [],
+      explosions: [],
       timeSeconds: 1
     })
     renderGame({
@@ -129,6 +130,7 @@ describe("renderGame", () => {
       ],
       projectiles: [],
       asteroids: [],
+      explosions: [],
       timeSeconds: 1
     })
 
@@ -147,6 +149,7 @@ describe("renderGame", () => {
       players: [renderPlayer],
       projectiles: [],
       asteroids: [],
+      explosions: [],
       timeSeconds: 1
     })
 
@@ -178,6 +181,7 @@ describe("renderGame", () => {
       ],
       projectiles: [],
       asteroids: [],
+      explosions: [],
       timeSeconds: 1
     })
 
@@ -210,6 +214,7 @@ describe("renderGame", () => {
         }
       ],
       asteroids: [],
+      explosions: [],
       timeSeconds: 1
     })
 
@@ -227,6 +232,7 @@ describe("renderGame", () => {
       players: [renderPlayer],
       projectiles: [],
       asteroids: [asteroid],
+      explosions: [],
       timeSeconds: 1
     })
 

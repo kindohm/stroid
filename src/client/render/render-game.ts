@@ -6,6 +6,15 @@ export type RenderPlayerView = {
   ship: PlayerShip
   color: string
   isThrusting: boolean
+  isLocal?: boolean
+  isInvincible?: boolean
+  isHidden?: boolean
+}
+
+export type RenderExplosion = {
+  position: Vector
+  color: string
+  ageSeconds: number
 }
 
 type RenderGameArgs = {
@@ -16,13 +25,55 @@ type RenderGameArgs = {
   players: RenderPlayerView[]
   projectiles: Projectile[]
   asteroids: Asteroid[]
+  explosions: RenderExplosion[]
   timeSeconds: number
 }
+
+let backgroundGradient:
+  | {
+      width: number
+      height: number
+      value: CanvasGradient
+    }
+  | undefined
 
 const worldToScreen = (point: Vector, camera: Vector, viewport: Vector): Vector => ({
   x: point.x - camera.x + viewport.x / 2,
   y: point.y - camera.y + viewport.y / 2
 })
+
+const isOnScreen = (screenPosition: Vector, viewport: Vector, margin: number) =>
+  screenPosition.x >= -margin &&
+  screenPosition.x <= viewport.x + margin &&
+  screenPosition.y >= -margin &&
+  screenPosition.y <= viewport.y + margin
+
+const getBackgroundGradient = (
+  context: CanvasRenderingContext2D,
+  viewport: Vector
+): CanvasGradient => {
+  if (backgroundGradient?.width === viewport.x && backgroundGradient.height === viewport.y) {
+    return backgroundGradient.value
+  }
+
+  const gradient = context.createRadialGradient(
+    viewport.x / 2,
+    viewport.y / 2,
+    40,
+    viewport.x / 2,
+    viewport.y / 2,
+    Math.max(viewport.x, viewport.y) * 0.8
+  )
+  gradient.addColorStop(0, "#102026")
+  gradient.addColorStop(1, "#05070a")
+  backgroundGradient = {
+    width: viewport.x,
+    height: viewport.y,
+    value: gradient
+  }
+
+  return gradient
+}
 
 const drawGrid = (
   context: CanvasRenderingContext2D,
@@ -107,21 +158,30 @@ const drawShip = (
   player: PlayerShip,
   color: string,
   isThrusting: boolean,
-  timeSeconds: number
+  timeSeconds: number,
+  isLocal = false
 ) => {
   context.save()
   context.translate(screenPosition.x, screenPosition.y)
   context.rotate(player.angle)
 
-  if (isThrusting) {
+  if (player && isLocal) {
+    context.globalAlpha = 1
+  }
+
+  if (isLocal && isThrusting) {
     drawThrust(context, timeSeconds)
   }
 
   context.strokeStyle = color
   context.fillStyle = "rgba(12, 22, 28, 0.92)"
-  context.lineWidth = 2
-  context.shadowColor = color
-  context.shadowBlur = 14
+  context.lineWidth = isLocal ? 2 : 1.5
+
+  if (isLocal) {
+    context.shadowColor = color
+    context.shadowBlur = 14
+  }
+
   context.beginPath()
   context.moveTo(24, 0)
   context.lineTo(-16, -13)
@@ -131,6 +191,60 @@ const drawShip = (
   context.fill()
   context.stroke()
   context.restore()
+}
+
+const drawGhostBubble = (
+  context: CanvasRenderingContext2D,
+  screenPosition: Vector,
+  color: string,
+  timeSeconds: number
+) => {
+  const pulse = Math.sin(timeSeconds * 8) * 3
+
+  context.save()
+  context.globalAlpha = 0.72
+  context.strokeStyle = color
+  context.fillStyle = "rgba(236, 248, 241, 0.06)"
+  context.lineWidth = 1.5
+  context.shadowColor = color
+  context.shadowBlur = 16
+  context.beginPath()
+  context.arc(screenPosition.x, screenPosition.y, gameConfig.shipRadius + 14 + pulse, 0, Math.PI * 2)
+  context.fill()
+  context.stroke()
+  context.restore()
+}
+
+const drawExplosions = (
+  context: CanvasRenderingContext2D,
+  camera: Vector,
+  viewport: Vector,
+  explosions: RenderExplosion[]
+) => {
+  explosions.forEach((explosion) => {
+    const screenPosition = worldToScreen(explosion.position, camera, viewport)
+    const progress = Math.min(1, explosion.ageSeconds / 0.8)
+    const alpha = 1 - progress
+
+    context.save()
+    context.globalAlpha = alpha
+    context.strokeStyle = explosion.color
+    context.fillStyle = "rgba(255, 244, 166, 0.18)"
+    context.lineWidth = 2
+    context.shadowColor = explosion.color
+    context.shadowBlur = 20
+
+    for (let index = 0; index < 3; index += 1) {
+      context.beginPath()
+      context.arc(screenPosition.x, screenPosition.y, 10 + progress * (28 + index * 14), 0, Math.PI * 2)
+      context.stroke()
+    }
+
+    context.beginPath()
+    context.arc(screenPosition.x, screenPosition.y, 5 + progress * 10, 0, Math.PI * 2)
+    context.fill()
+    context.restore()
+  })
 }
 
 const drawShipLabel = (
@@ -172,6 +286,10 @@ const drawProjectiles = (
   projectiles.forEach((projectile) => {
     const screenPosition = worldToScreen(projectile.position, camera, viewport)
 
+    if (!isOnScreen(screenPosition, viewport, gameConfig.projectileRadius + 12)) {
+      return
+    }
+
     context.save()
     context.fillStyle = projectile.color
     context.shadowColor = projectile.color
@@ -197,6 +315,11 @@ const drawAsteroids = (
 ) => {
   asteroids.forEach((asteroid) => {
     const screenPosition = worldToScreen(asteroid.position, camera, viewport)
+
+    if (!isOnScreen(screenPosition, viewport, asteroid.radius + 24)) {
+      return
+    }
+
     const step = (Math.PI * 2) / asteroid.shape.length
 
     context.save()
@@ -226,6 +349,27 @@ const drawAsteroids = (
     context.fill()
     context.stroke()
     context.restore()
+
+    if (asteroid.name) {
+      context.save()
+      context.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace"
+      context.textAlign = "center"
+      context.textBaseline = "middle"
+      context.fillStyle = "rgba(5, 7, 10, 0.78)"
+      context.strokeStyle = "rgba(218, 209, 184, 0.66)"
+      context.lineWidth = 1
+
+      const labelWidth = Math.max(44, context.measureText(asteroid.name).width + 16)
+      const labelY = screenPosition.y - asteroid.radius - 18
+
+      context.beginPath()
+      context.roundRect(screenPosition.x - labelWidth / 2, labelY - 10, labelWidth, 20, 4)
+      context.fill()
+      context.stroke()
+      context.fillStyle = "rgba(236, 248, 241, 0.84)"
+      context.fillText(asteroid.name, screenPosition.x, labelY + 1)
+      context.restore()
+    }
   })
 }
 
@@ -273,8 +417,7 @@ const drawMiniMap = (
     const markerY = y + padding + (player.ship.position.y / world.height) * innerHeight
 
     context.fillStyle = player.color
-    context.shadowColor = player.color
-    context.shadowBlur = 9
+    context.shadowBlur = 0
     context.beginPath()
     context.arc(markerX, markerY, 4, 0, Math.PI * 2)
     context.fill()
@@ -285,8 +428,7 @@ const drawMiniMap = (
     const markerY = y + padding + (projectile.position.y / world.height) * innerHeight
 
     context.fillStyle = projectile.color
-    context.shadowColor = projectile.color
-    context.shadowBlur = 6
+    context.shadowBlur = 0
     context.beginPath()
     context.arc(markerX, markerY, 2, 0, Math.PI * 2)
     context.fill()
@@ -327,35 +469,61 @@ export const renderGame = ({
   players,
   projectiles,
   asteroids,
+  explosions,
   timeSeconds
 }: RenderGameArgs) => {
   context.clearRect(0, 0, viewport.x, viewport.y)
 
-  const gradient = context.createRadialGradient(
-    viewport.x / 2,
-    viewport.y / 2,
-    40,
-    viewport.x / 2,
-    viewport.y / 2,
-    Math.max(viewport.x, viewport.y) * 0.8
-  )
-  gradient.addColorStop(0, "#102026")
-  gradient.addColorStop(1, "#05070a")
-
-  context.fillStyle = gradient
+  context.fillStyle = getBackgroundGradient(context, viewport)
   context.fillRect(0, 0, viewport.x, viewport.y)
 
   drawGrid(context, localPlayer.ship.position, viewport, world)
   drawBoundary(context, localPlayer.ship.position, viewport, world)
   drawAsteroids(context, localPlayer.ship.position, viewport, asteroids)
   drawProjectiles(context, localPlayer.ship.position, viewport, projectiles)
+  drawExplosions(context, localPlayer.ship.position, viewport, explosions)
 
-  players.forEach((player) => {
+  const hasMarkedLocalPlayer = players.some((player) => player.isLocal)
+  const remotePlayers = hasMarkedLocalPlayer
+    ? players.filter((player) => !player.isLocal)
+    : players.filter((player) => player !== localPlayer)
+
+  remotePlayers.forEach((player) => {
     const screenPosition = worldToScreen(player.ship.position, localPlayer.ship.position, viewport)
 
-    drawShip(context, screenPosition, player.ship, player.color, player.isThrusting, timeSeconds)
-    drawShipLabel(context, screenPosition, player.username, player.color)
+    if (!isOnScreen(screenPosition, viewport, gameConfig.shipRadius + 70)) {
+      return
+    }
+
+    if (player.isInvincible) {
+      drawGhostBubble(context, screenPosition, player.color, timeSeconds)
+    }
+
+    drawShip(context, screenPosition, player.ship, player.color, false, timeSeconds)
   })
+
+  const localScreenPosition = worldToScreen(
+    localPlayer.ship.position,
+    localPlayer.ship.position,
+    viewport
+  )
+
+  if (!localPlayer.isHidden) {
+    if (localPlayer.isInvincible) {
+      drawGhostBubble(context, localScreenPosition, localPlayer.color, timeSeconds)
+    }
+
+    drawShip(
+      context,
+      localScreenPosition,
+      localPlayer.ship,
+      localPlayer.color,
+      localPlayer.isThrusting,
+      timeSeconds,
+      true
+    )
+    drawShipLabel(context, localScreenPosition, localPlayer.username, localPlayer.color)
+  }
 
   drawMiniMap(context, viewport, world, players, projectiles, asteroids)
   drawHud(context, localPlayer.ship, localPlayer.username)
