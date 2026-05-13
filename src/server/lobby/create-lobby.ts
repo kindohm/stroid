@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto"
 import type { WebSocket } from "ws"
-import { assignPlayerColor } from "../game/assign-player-color"
-import { createBorderAsteroid } from "../game/create-border-asteroid"
-import { getAsteroidSpawnTarget } from "../game/get-asteroid-spawn-target"
-import { getAsteroidSpeedMultiplier } from "../game/get-asteroid-speed-multiplier"
-import { splitAsteroid } from "../game/split-asteroid"
-import { updateAsteroids } from "../game/update-asteroids"
-import { gameConfig } from "../shared/game-config"
-import type { Asteroid, AsteroidSize, GameWorld, Projectile } from "../shared/game-types"
+import { assignPlayerColor } from "../../game/assign-player-color"
+import { createBorderAsteroid } from "../../game/create-border-asteroid"
+import { getAsteroidSpawnTarget } from "../../game/get-asteroid-spawn-target"
+import { getAsteroidSpeedMultiplier } from "../../game/get-asteroid-speed-multiplier"
+import { splitAsteroid } from "../../game/split-asteroid"
+import { updateAsteroids } from "../../game/update-asteroids"
+import { gameConfig } from "../../shared/game-config"
+import type { Asteroid, AsteroidSize, GameWorld } from "../../shared/game-types"
 import type {
   AsteroidNamePools,
   AsteroidNameSize,
@@ -15,18 +15,23 @@ import type {
   ClientLobbyMessage,
   LifeState,
   LobbyPlayer,
+  LobbySummary,
   PlayerAsteroidStats,
   ScoreState,
   ServerLobbyMessage
-} from "../shared/lobby-types"
+} from "../../shared/lobby-types"
+import { defaultAsteroidNames } from "./default-asteroid-names"
+import type { LobbyClient } from "./lobby-client"
+import { parseClientMessage } from "./parse-client-message"
+import { sendMessage } from "./send-message"
 
-type LobbyClient = {
-  id: string
-  socket: WebSocket
-  username?: string
+type LobbyArgs = {
+  hostId: string
+  slug: string
+  onChanged?: () => void
+  onEmpty?: (slug: string) => void
 }
 
-const sanitizeUsername = (username: string) => username.trim().slice(0, 18)
 const world: GameWorld = {
   width: gameConfig.mapTilesWide * gameConfig.tileSize,
   height: gameConfig.mapTilesTall * gameConfig.tileSize
@@ -37,106 +42,21 @@ const asteroidScoreBySize: Record<AsteroidSize, number> = {
   medium: 200,
   small: 300
 }
-const defaultAsteroidNames: AsteroidNamePools = {
-  extraLarge: ["Worldbone", "Old Mountain", "The Big Oof"],
-  large: ["Goliath", "Big Drift", "Hullbreaker"],
-  medium: ["Nomad", "Basalt", "Cinder"],
-  small: ["Pebble", "Spark", "Chip"]
-}
 const nameSizeByAsteroidSize: Record<AsteroidSize, AsteroidNameSize> = {
   extraLarge: "extraLarge",
   large: "large",
   medium: "medium",
   small: "small"
 }
-const sanitizeAsteroidNames = (value: unknown, fallback: AsteroidNamePools): AsteroidNamePools => {
-  if (!value || typeof value !== "object") {
-    return fallback
-  }
 
-  const source = value as Partial<Record<AsteroidNameSize, unknown>>
-  const sanitizeList = (size: AsteroidNameSize) => {
-    const names = Array.isArray(source[size]) ? source[size] : fallback[size]
-    const sanitized = names
-      .filter((name): name is string => typeof name === "string")
-      .map((name) => name.trim().slice(0, 24))
-      .filter((name) => name.length > 0)
-      .slice(0, 12)
-
-    return sanitized.length > 0 ? sanitized : fallback[size]
-  }
-
-  return {
-    extraLarge: sanitizeList("extraLarge"),
-    large: sanitizeList("large"),
-    medium: sanitizeList("medium"),
-    small: sanitizeList("small")
-  }
-}
-
-const parseClientMessage = (data: WebSocket.RawData): ClientLobbyMessage | undefined => {
-  try {
-    const message = JSON.parse(data.toString()) as Partial<ClientLobbyMessage>
-
-    if (message.type === "startGame") {
-      return {
-        type: "startGame"
-      }
-    }
-
-    if (message.type === "setAsteroidNames") {
-      return {
-        type: "setAsteroidNames",
-        asteroidNames: sanitizeAsteroidNames(message.asteroidNames, defaultAsteroidNames)
-      }
-    }
-
-    if (message.type === "playerState" && typeof message.ship === "object" && message.ship) {
-      return {
-        type: "playerState",
-        ship: message.ship
-      } as ClientLobbyMessage
-    }
-
-    if (message.type === "asteroidHit" && typeof message.asteroidId === "string") {
-      return {
-        type: "asteroidHit",
-        asteroidId: message.asteroidId
-      }
-    }
-
-    if (message.type === "playerHit") {
-      return {
-        type: "playerHit"
-      }
-    }
-
-    if (message.type === "projectileFired" && typeof message.projectile === "object" && message.projectile) {
-      return {
-        type: "projectileFired",
-        projectile: message.projectile as Projectile
-      }
-    }
-
-    if (message.type === "joinLobby" && typeof message.username === "string") {
-      return {
-        type: "joinLobby",
-        username: sanitizeUsername(message.username),
-        asteroidNames:
-          typeof message.asteroidNames === "object" && message.asteroidNames
-            ? sanitizeAsteroidNames(message.asteroidNames, defaultAsteroidNames)
-            : undefined
-      }
-    }
-
-    return undefined
-  } catch {
-    return undefined
-  }
-}
-
-export const createLobby = () => {
+export const createLobby = ({
+  hostId = "",
+  slug = "local-lobby",
+  onChanged,
+  onEmpty
+}: Partial<LobbyArgs> = {}) => {
   const clients = new Map<string, LobbyClient>()
+  let hostClientId = hostId
   let asteroids: Asteroid[] = []
   let asteroidsSpawned = 0
   let asteroidsDestroyed = 0
@@ -187,6 +107,14 @@ export const createLobby = () => {
         username: client.username ?? "",
         color: assignPlayerColor(client.username ?? "")
       }))
+
+  const getSummary = (): LobbySummary => ({
+    slug,
+    hostId: hostClientId,
+    hostUsername: clients.get(hostClientId)?.username ?? "unknown pilot",
+    playerCount: getPlayers().length,
+    gameInProgress
+  })
 
   const getScoreState = (): ScoreState => {
     const players = getPlayers()
@@ -266,12 +194,14 @@ export const createLobby = () => {
   const sendLobbyState = (client: LobbyClient) => {
     const message: ServerLobbyMessage = {
       type: "lobbyState",
+      slug,
+      hostId: hostClientId,
       selfId: client.id,
       players: getPlayers(),
       asteroidNames
     }
 
-    client.socket.send(JSON.stringify(message))
+    sendMessage(client, message)
   }
 
   const broadcastScoreState = () => {
@@ -282,7 +212,7 @@ export const createLobby = () => {
 
     clients.forEach((client) => {
       if (client.username) {
-        client.socket.send(JSON.stringify(message))
+        sendMessage(client, message)
       }
     })
   }
@@ -295,7 +225,7 @@ export const createLobby = () => {
 
     clients.forEach((client) => {
       if (client.username) {
-        client.socket.send(JSON.stringify(message))
+        sendMessage(client, message)
       }
     })
   }
@@ -310,13 +240,14 @@ export const createLobby = () => {
 
     clients.forEach((client) => {
       if (client.username) {
-        client.socket.send(JSON.stringify(message))
+        sendMessage(client, message)
       }
     })
   }
 
   const broadcastLobbyState = () => {
     clients.forEach(sendLobbyState)
+    onChanged?.()
   }
 
   const broadcastAsteroidState = () => {
@@ -327,7 +258,7 @@ export const createLobby = () => {
 
     clients.forEach((client) => {
       if (client.username) {
-        client.socket.send(JSON.stringify(message))
+        sendMessage(client, message)
       }
     })
   }
@@ -374,12 +305,14 @@ export const createLobby = () => {
 
     const message: ServerLobbyMessage = {
       type: "gameStarted",
+      slug,
+      hostId: hostClientId,
       selfId: client.id,
       players: getPlayers(),
       asteroidNames
     }
 
-    client.socket.send(JSON.stringify(message))
+    sendMessage(client, message)
   }
 
   const broadcastGameStarted = () => {
@@ -397,9 +330,30 @@ export const createLobby = () => {
     clients.forEach(sendGameStarted)
     broadcastScoreState()
     broadcastLifeState()
+    onChanged?.()
   }
 
-  const handlePlayerHit = (client: LobbyClient) => {
+  const broadcastPlayerDestroyed = (
+    client: LobbyClient,
+    ship: Extract<ClientLobbyMessage, { type: "playerHit" }>["ship"]
+  ) => {
+    const message: ServerLobbyMessage = {
+      type: "playerDestroyed",
+      playerId: client.id,
+      ship
+    }
+
+    clients.forEach((nextClient) => {
+      if (nextClient.id !== client.id && nextClient.username) {
+        sendMessage(nextClient, message)
+      }
+    })
+  }
+
+  const handlePlayerHit = (
+    client: LobbyClient,
+    ship: Extract<ClientLobbyMessage, { type: "playerHit" }>["ship"]
+  ) => {
     if (!gameInProgress || gameOver || !client.username) {
       return
     }
@@ -411,6 +365,7 @@ export const createLobby = () => {
     }
 
     livesByClientId.set(client.id, Math.max(0, currentLives - 1))
+    broadcastPlayerDestroyed(client, ship)
     broadcastLifeState()
 
     const players = getLifeState().players
@@ -420,10 +375,15 @@ export const createLobby = () => {
       gameInProgress = false
       stopAsteroids()
       broadcastGameOver()
+      onChanged?.()
     }
   }
 
   const handleAsteroidHit = (client: LobbyClient, asteroidIdToHit: string) => {
+    if (!client.username || !gameInProgress || gameOver) {
+      return
+    }
+
     const asteroid = asteroids.find((nextAsteroid) => nextAsteroid.id === asteroidIdToHit)
 
     if (!asteroid) {
@@ -434,6 +394,16 @@ export const createLobby = () => {
       client.id,
       (scoresByClientId.get(client.id) ?? 0) + asteroidScoreBySize[asteroid.size]
     )
+    const destroyedMessage: ServerLobbyMessage = {
+      type: "asteroidDestroyed",
+      asteroid: {
+        id: asteroid.id,
+        position: asteroid.position,
+        radius: asteroid.radius,
+        size: asteroid.size
+      }
+    }
+
     recordAsteroidDestroyed(client, asteroid)
     asteroids = asteroids.filter((nextAsteroid) => nextAsteroid.id !== asteroidIdToHit)
     asteroidsDestroyed += 1
@@ -446,11 +416,19 @@ export const createLobby = () => {
     asteroidsSpawned += children.length
     asteroids = [...asteroids, ...children]
     fillAsteroidTarget()
+    clients.forEach((nextClient) => {
+      if (nextClient.username) {
+        sendMessage(nextClient, destroyedMessage)
+      }
+    })
     broadcastScoreState()
     broadcastAsteroidState()
   }
 
-  const broadcastPlayerState = (client: LobbyClient, ship: Extract<ClientLobbyMessage, { type: "playerState" }>["ship"]) => {
+  const broadcastPlayerState = (
+    client: LobbyClient,
+    ship: Extract<ClientLobbyMessage, { type: "playerState" }>["ship"]
+  ) => {
     const message: ServerLobbyMessage = {
       type: "playerState",
       playerId: client.id,
@@ -459,7 +437,7 @@ export const createLobby = () => {
 
     clients.forEach((nextClient) => {
       if (nextClient.id !== client.id && nextClient.username) {
-        nextClient.socket.send(JSON.stringify(message))
+        sendMessage(nextClient, message)
       }
     })
   }
@@ -476,70 +454,29 @@ export const createLobby = () => {
 
     clients.forEach((nextClient) => {
       if (nextClient.id !== client.id && nextClient.username) {
-        nextClient.socket.send(JSON.stringify(message))
+        sendMessage(nextClient, message)
       }
     })
   }
 
-  const addClient = (socket: WebSocket) => {
-    const client: LobbyClient = {
-      id: randomUUID(),
-      socket
+  const removeClient = (client: LobbyClient) => {
+    clients.delete(client.id)
+    broadcastLobbyState()
+    broadcastScoreState()
+    broadcastLifeState()
+
+    if (clients.size === 0) {
+      stopAsteroids()
+      onEmpty?.(slug)
+    }
+  }
+
+  const handleMessage = (client: LobbyClient, message: ClientLobbyMessage) => {
+    if (!clients.has(client.id)) {
+      return
     }
 
-    clients.set(client.id, client)
-    sendLobbyState(client)
-
-    socket.on("message", (data) => {
-      const message = parseClientMessage(data)
-
-      if (!message) {
-        return
-      }
-
-      if (message.type === "startGame") {
-        if (client.username && getPlayers().length > 0) {
-          broadcastGameStarted()
-        }
-
-        return
-      }
-
-      if (message.type === "setAsteroidNames") {
-        if (client.username) {
-          asteroidNames = message.asteroidNames
-          broadcastLobbyState()
-        }
-
-        return
-      }
-
-      if (message.type === "playerState") {
-        if (client.username && !gameOver && (livesByClientId.get(client.id) ?? gameConfig.playerStartingLives) > 0) {
-          broadcastPlayerState(client, message.ship)
-        }
-
-        return
-      }
-
-      if (message.type === "playerHit") {
-        handlePlayerHit(client)
-        return
-      }
-
-      if (message.type === "projectileFired") {
-        if (client.username && !gameOver && (livesByClientId.get(client.id) ?? gameConfig.playerStartingLives) > 0) {
-          broadcastProjectileFired(client, message.projectile)
-        }
-
-        return
-      }
-
-      if (message.type === "asteroidHit") {
-        handleAsteroidHit(client, message.asteroidId)
-        return
-      }
-
+    if (message.type === "renamePlayer") {
       if (message.username.length > 0) {
         if (getPlayers().length === 0 && message.asteroidNames) {
           asteroidNames = message.asteroidNames
@@ -550,19 +487,99 @@ export const createLobby = () => {
         broadcastScoreState()
         broadcastLifeState()
       }
-    })
 
-    socket.on("close", () => {
-      clients.delete(client.id)
-      broadcastLobbyState()
-      broadcastScoreState()
-      broadcastLifeState()
-    })
+      return
+    }
+
+    if (message.type === "startGame") {
+      if (client.id === hostClientId && client.username && getPlayers().length > 0 && !gameInProgress) {
+        broadcastGameStarted()
+      }
+
+      return
+    }
+
+    if (message.type === "setAsteroidNames") {
+      if (client.username) {
+        asteroidNames = message.asteroidNames
+        broadcastLobbyState()
+      }
+
+      return
+    }
+
+    if (message.type === "playerState") {
+      if (client.username && !gameOver && (livesByClientId.get(client.id) ?? gameConfig.playerStartingLives) > 0) {
+        broadcastPlayerState(client, message.ship)
+      }
+
+      return
+    }
+
+    if (message.type === "playerHit") {
+      handlePlayerHit(client, message.ship)
+      return
+    }
+
+    if (message.type === "projectileFired") {
+      if (client.username && !gameOver && (livesByClientId.get(client.id) ?? gameConfig.playerStartingLives) > 0) {
+        broadcastProjectileFired(client, message.projectile)
+      }
+
+      return
+    }
+
+    if (message.type === "asteroidHit") {
+      handleAsteroidHit(client, message.asteroidId)
+    }
+  }
+
+  const addClient = (clientOrSocket: LobbyClient | WebSocket, initialAsteroidNames?: AsteroidNamePools) => {
+    const client = "socket" in clientOrSocket
+      ? clientOrSocket
+      : {
+          id: randomUUID(),
+          socket: clientOrSocket
+        }
+
+    if (!hostClientId) {
+      hostClientId = client.id
+    }
+
+    clients.set(client.id, client)
+
+    if (getPlayers().length === 0 && initialAsteroidNames) {
+      asteroidNames = initialAsteroidNames
+    }
+
+    sendLobbyState(client)
+    broadcastLobbyState()
+    broadcastScoreState()
+    broadcastLifeState()
+
+    if (!("socket" in clientOrSocket)) {
+      client.socket.on("message", (data) => {
+        const message = parseClientMessage(data)
+
+        if (message) {
+          handleMessage(client, message)
+        }
+      })
+
+      client.socket.on("close", () => {
+        removeClient(client)
+      })
+    }
   }
 
   return {
     addClient,
     getPlayers,
+    getSummary,
+    handleMessage,
+    hasClient: (clientId: string) => clients.has(clientId),
+    isJoinable: () => !gameInProgress,
+    removeClient,
     stop: stopAsteroids
   }
 }

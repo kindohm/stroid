@@ -500,6 +500,7 @@ export const renderGame = ({
     }
 
     drawShip(context, screenPosition, player.ship, player.color, false, timeSeconds)
+    drawShipLabel(context, screenPosition, player.username, player.color)
   })
 
   const localScreenPosition = worldToScreen(

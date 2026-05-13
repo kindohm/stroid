@@ -8,6 +8,10 @@ describe("getAsteroidSpawnTarget", () => {
   })
 
   it("increases from spawned and destroyed counts", () => {
-    expect(getAsteroidSpawnTarget(5, 5)).toBeGreaterThan(getAsteroidSpawnTarget(0, 0))
+    expect(getAsteroidSpawnTarget(12, 0)).toBe(gameConfig.initialAsteroidTarget + 1)
+  })
+
+  it("does not increase before the slower pressure step", () => {
+    expect(getAsteroidSpawnTarget(5, 5)).toBe(gameConfig.initialAsteroidTarget)
   })
 })

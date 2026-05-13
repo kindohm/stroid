@@ -1,28 +1,16 @@
-import { describe, expect, it, vi } from "vitest"
-import { createLobby } from "./lobby"
+import { describe, expect, it } from "vitest"
+import { createLobby } from "./create-lobby"
+import { createSocket } from "./create-socket-stub.test-helper"
 
-type SocketStub = {
-  sent: string[]
-  listeners: Map<string, (data?: unknown) => void>
-  send: (message: string) => void
-  on: (event: string, listener: (data?: unknown) => void) => void
-}
-
-const createSocket = (): SocketStub => {
-  const listeners = new Map<string, (data?: unknown) => void>()
-  const socket: SocketStub = {
-    sent: [],
-    listeners,
-    send: vi.fn((message: string) => {
-      socket.sent.push(message)
-    }),
-    on: vi.fn((event: string, listener: (data?: unknown) => void) => {
-      listeners.set(event, listener)
-    })
+const playerHitMessage = JSON.stringify({
+  type: "playerHit",
+  ship: {
+    position: { x: 120, y: 140 },
+    velocity: { x: 1, y: 2 },
+    angle: 0.5,
+    isThrusting: false
   }
-
-  return socket
-}
+})
 
 describe("createLobby", () => {
   it("broadcasts joined players to lobby clients", () => {
@@ -81,7 +69,10 @@ describe("createLobby", () => {
     first.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
 
     const asteroidState = first.sent
-      .map((message) => JSON.parse(message) as { type: string; asteroids?: Array<{ id: string; size: string }> })
+      .map((message) => JSON.parse(message) as {
+        type: string
+        asteroids?: Array<{ id: string; size: string; position: { x: number } }>
+      })
       .find((message) => message.type === "asteroidState")
     const asteroid = asteroidState?.asteroids?.[0]
 
@@ -89,11 +80,23 @@ describe("createLobby", () => {
 
     first.listeners.get("message")?.(JSON.stringify({ type: "asteroidHit", asteroidId: asteroid?.id }))
 
+    const destroyedState = first.sent
+      .map((message) => JSON.parse(message) as { type: string; asteroid?: { id: string; position: { x: number } } })
+      .find((message) => message.type === "asteroidDestroyed")
+    const destroyedStateForSecond = second.sent
+      .map((message) => JSON.parse(message) as { type: string; asteroid?: { id: string } })
+      .find((message) => message.type === "asteroidDestroyed")
     const scoreState = first.sent
-      .map((message) => JSON.parse(message) as { type: string; scores?: { teamScore: number; players: Array<{ username: string; score: number }> } })
+      .map((message) => JSON.parse(message) as {
+        type: string
+        scores?: { teamScore: number; players: Array<{ username: string; score: number }> }
+      })
       .filter((message) => message.type === "scoreState")
       .at(-1)
 
+    expect(destroyedState?.asteroid?.id).toBe(asteroid?.id)
+    expect(destroyedState?.asteroid?.position.x).toBe(asteroid?.position?.x)
+    expect(destroyedStateForSecond?.asteroid?.id).toBe(asteroid?.id)
     expect(scoreState?.scores?.teamScore).toBe(100)
     expect(scoreState?.scores?.players).toEqual([
       expect.objectContaining({ username: "mike", score: 100 }),
@@ -110,11 +113,14 @@ describe("createLobby", () => {
 
     socket.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
     socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "playerHit" }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "playerHit" }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "playerHit" }))
+    socket.listeners.get("message")?.(playerHitMessage)
+    socket.listeners.get("message")?.(playerHitMessage)
+    socket.listeners.get("message")?.(playerHitMessage)
 
-    const messages = socket.sent.map((message) => JSON.parse(message) as { type: string; lives?: { players: Array<{ lives: number; isEliminated: boolean }> } })
+    const messages = socket.sent.map((message) => JSON.parse(message) as {
+      type: string
+      lives?: { players: Array<{ lives: number; isEliminated: boolean }> }
+    })
     const latestLifeState = messages.filter((message) => message.type === "lifeState").at(-1)
     const gameOver = messages.find((message) => message.type === "gameOver")
 
@@ -160,6 +166,32 @@ describe("createLobby", () => {
 
     expect(relayedToFirst).toBeUndefined()
     expect(relayedToSecond?.projectile?.id).toBe("mike-1")
+    lobby.stop()
+  })
+
+  it("relays player destruction to other players", () => {
+    const lobby = createLobby()
+    const first = createSocket()
+    const second = createSocket()
+
+    lobby.addClient(first as never)
+    lobby.addClient(second as never)
+
+    first.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    second.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
+    first.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    first.listeners.get("message")?.(playerHitMessage)
+
+    const relayedToFirst = first.sent
+      .map((message) => JSON.parse(message) as { type: string })
+      .find((message) => message.type === "playerDestroyed")
+    const relayedToSecond = second.sent
+      .map((message) => JSON.parse(message) as { type: string; playerId?: string; ship?: { position: { x: number } } })
+      .find((message) => message.type === "playerDestroyed")
+
+    expect(relayedToFirst).toBeUndefined()
+    expect(relayedToSecond?.playerId).toBeDefined()
+    expect(relayedToSecond?.ship?.position.x).toBe(120)
     lobby.stop()
   })
 
@@ -286,16 +318,19 @@ describe("createLobby", () => {
     socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
 
     const asteroidState = socket.sent
-      .map((message) => JSON.parse(message) as { type: string; asteroids?: Array<{ id: string; name: string; size: "extraLarge" | "large" | "medium" | "small" }> })
+      .map((message) => JSON.parse(message) as {
+        type: string
+        asteroids?: Array<{ id: string; name: string; size: "extraLarge" | "large" | "medium" | "small" }>
+      })
       .find((message) => message.type === "asteroidState")
     const asteroid = asteroidState?.asteroids?.[0]
 
     expect(asteroid).toBeDefined()
 
     socket.listeners.get("message")?.(JSON.stringify({ type: "asteroidHit", asteroidId: asteroid?.id }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "playerHit" }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "playerHit" }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "playerHit" }))
+    socket.listeners.get("message")?.(playerHitMessage)
+    socket.listeners.get("message")?.(playerHitMessage)
+    socket.listeners.get("message")?.(playerHitMessage)
 
     const gameOver = socket.sent
       .map((message) => JSON.parse(message) as {
@@ -333,9 +368,9 @@ describe("createLobby", () => {
     expect(asteroid?.id).toBe("asteroid-1")
 
     socket.listeners.get("message")?.(JSON.stringify({ type: "asteroidHit", asteroidId: asteroid?.id }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "playerHit" }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "playerHit" }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "playerHit" }))
+    socket.listeners.get("message")?.(playerHitMessage)
+    socket.listeners.get("message")?.(playerHitMessage)
+    socket.listeners.get("message")?.(playerHitMessage)
     socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
 
     const secondAsteroidState = socket.sent

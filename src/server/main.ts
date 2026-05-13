@@ -4,7 +4,7 @@ import { extname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { WebSocketServer } from "ws"
-import { createLobby } from "./lobby"
+import { createLobbyManager } from "./lobby/create-lobby-manager"
 
 const port = Number(process.env.PORT ?? 5173)
 const host = process.env.HOST ?? "127.0.0.1"
@@ -67,14 +67,14 @@ const createDevelopmentHandler = async () => {
 
 const startServer = async () => {
   const requestHandler = isProduction ? createProductionHandler() : await createDevelopmentHandler()
-  const lobby = createLobby()
+  const lobbyManager = createLobbyManager()
   const server = createServer(requestHandler)
   const socketServer = new WebSocketServer({
     server,
     path: "/ws"
   })
 
-  socketServer.on("connection", lobby.addClient)
+  socketServer.on("connection", lobbyManager.addClient)
 
   server.listen(port, host, () => {
     console.log(`stroid listening at http://${host}:${port}`)

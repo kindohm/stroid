@@ -109,6 +109,19 @@ textarea {
   padding: 34px;
 }
 
+.lobby-panel-wide {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.lobby-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
 .signal {
   margin: 0 0 12px;
   color: rgba(116, 255, 224, 0.72);
@@ -127,6 +140,19 @@ h1 {
 .join-form {
   display: grid;
   gap: 16px;
+}
+
+.lobby-note {
+  margin: 16px 0 0;
+  color: rgba(236, 248, 241, 0.56);
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.lobby-browser-actions,
+.room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .lobby-roster,
@@ -173,10 +199,27 @@ h1 {
   padding: 10px;
 }
 
+.lobby-list {
+  display: grid;
+  gap: 10px;
+  min-height: 96px;
+  margin: 0;
+  border: 1px solid rgba(116, 255, 224, 0.16);
+  background: rgba(16, 32, 38, 0.38);
+  list-style: none;
+  padding: 10px;
+}
+
 .player-list:empty::before {
   content: "waiting for pilots";
   color: rgba(236, 248, 241, 0.34);
   font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.lobby-empty {
+  color: rgba(236, 248, 241, 0.38);
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 14px 2px;
 }
 
 .player-list-item {
@@ -188,10 +231,95 @@ h1 {
   font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.lobby-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  border: 1px solid rgba(236, 248, 241, 0.1);
+  background: rgba(5, 7, 10, 0.38);
+  padding: 10px;
+}
+
+.lobby-card div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.lobby-card strong,
+.room-plate strong {
+  overflow: hidden;
+  color: #fffce8;
+  font: 700 16px ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-card span,
+.room-plate span {
+  color: rgba(236, 248, 241, 0.58);
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.lobby-status {
+  border: 1px solid rgba(116, 255, 224, 0.22);
+  color: rgba(116, 255, 224, 0.76);
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 6px 8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.lobby-status.is-live {
+  border-color: rgba(255, 244, 166, 0.32);
+  color: rgba(255, 244, 166, 0.76);
+}
+
 .player-swatch {
   width: 10px;
   height: 10px;
   box-shadow: 0 0 12px currentColor;
+}
+
+.room-plate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 1.2fr);
+  align-items: end;
+  gap: 12px;
+  border: 1px solid rgba(116, 255, 224, 0.18);
+  background: rgba(16, 32, 38, 0.32);
+  padding: 12px;
+}
+
+.room-plate div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.share-url {
+  font-size: 13px;
+  padding: 10px 12px;
+}
+
+.not-found-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.not-found-panel h2 {
+  margin: 0;
+  color: #fffce8;
+  font-size: clamp(32px, 7vw, 54px);
+  line-height: 0.94;
+}
+
+.not-found-panel p:not(.signal) {
+  margin: 0;
+  color: rgba(236, 248, 241, 0.66);
+  font: 14px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 label {
@@ -235,6 +363,12 @@ button {
   font-weight: 800;
   padding: 14px 18px;
   text-transform: uppercase;
+}
+
+.secondary-button {
+  border-color: rgba(116, 255, 224, 0.34);
+  background: rgba(16, 32, 38, 0.72);
+  color: rgba(236, 248, 241, 0.86);
 }
 
 button:disabled {
@@ -516,5 +650,21 @@ button:disabled {
   to {
     opacity: 0;
     transform: translateY(-22px) scale(1.04);
+  }
+}
+
+@media (max-width: 640px) {
+  .lobby-title-row,
+  .room-plate,
+  .lobby-card {
+    grid-template-columns: 1fr;
+  }
+
+  .lobby-title-row {
+    display: grid;
+  }
+
+  .lobby-card {
+    align-items: stretch;
   }
 }

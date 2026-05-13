@@ -1,9 +1,17 @@
-import type { Asteroid, Projectile } from "./game-types"
+import type { Asteroid, AsteroidSize, Projectile, Vector } from "./game-types"
 
 export type LobbyPlayer = {
   id: string
   username: string
   color: string
+}
+
+export type LobbySummary = {
+  slug: string
+  hostId: string
+  hostUsername: string
+  playerCount: number
+  gameInProgress: boolean
 }
 
 export type AsteroidNameSize = "extraLarge" | "large" | "medium" | "small"
@@ -52,7 +60,26 @@ export type NetworkPlayerShip = {
 
 export type ClientLobbyMessage =
   | {
+      type: "setUsername"
+      username: string
+    }
+  | {
+      type: "createLobby"
+      asteroidNames?: AsteroidNamePools
+    }
+  | {
       type: "joinLobby"
+      slug: string
+      asteroidNames?: AsteroidNamePools
+    }
+  | {
+      type: "leaveLobby"
+    }
+  | {
+      type: "listLobbies"
+    }
+  | {
+      type: "renamePlayer"
       username: string
       asteroidNames?: AsteroidNamePools
     }
@@ -73,6 +100,7 @@ export type ClientLobbyMessage =
     }
   | {
       type: "playerHit"
+      ship: NetworkPlayerShip
     }
   | {
       type: "projectileFired"
@@ -81,19 +109,52 @@ export type ClientLobbyMessage =
 
 export type ServerLobbyMessage =
   | {
+      type: "usernameAccepted"
+      username: string
+    }
+  | {
+      type: "usernameRejected"
+      reason: "blank"
+    }
+  | {
+      type: "lobbyList"
+      lobbies: LobbySummary[]
+    }
+  | {
+      type: "lobbyCreated"
+      lobby: LobbySummary
+    }
+  | {
+      type: "lobbyNotFound"
+      slug: string
+    }
+  | {
+      type: "lobbyJoinRejected"
+      reason: "notFound" | "gameInProgress" | "missingUsername"
+    }
+  | {
       type: "lobbyState"
+      slug: string
+      hostId: string
       selfId: string
       players: LobbyPlayer[]
       asteroidNames: AsteroidNamePools
     }
   | {
       type: "gameStarted"
+      slug: string
+      hostId: string
       selfId: string
       players: LobbyPlayer[]
       asteroidNames: AsteroidNamePools
     }
   | {
       type: "playerState"
+      playerId: string
+      ship: NetworkPlayerShip
+    }
+  | {
+      type: "playerDestroyed"
       playerId: string
       ship: NetworkPlayerShip
     }
@@ -105,6 +166,15 @@ export type ServerLobbyMessage =
   | {
       type: "asteroidState"
       asteroids: Asteroid[]
+    }
+  | {
+      type: "asteroidDestroyed"
+      asteroid: {
+        id: string
+        position: Vector
+        radius: number
+        size: AsteroidSize
+      }
     }
   | {
       type: "scoreState"

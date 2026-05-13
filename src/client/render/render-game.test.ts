@@ -36,7 +36,7 @@ const createContextStub = (): ContextStub => {
     translate: () => operations.push("translate"),
     rotate: () => operations.push("rotate"),
     setLineDash: () => operations.push("setLineDash"),
-    fillText: () => operations.push("fillText"),
+    fillText: (text: string) => operations.push(`fillText:${text}`),
     set fillStyle(_: string | CanvasGradient | CanvasPattern) {},
     set strokeStyle(_: string | CanvasGradient | CanvasPattern) {},
     set shadowColor(_: string) {},
@@ -154,6 +154,44 @@ describe("renderGame", () => {
     })
 
     expect(context.operations).toContain("roundRect")
+  })
+
+  it("draws username labels for visible remote ships", () => {
+    const context = createContextStub()
+
+    renderGame({
+      context,
+      viewport,
+      world,
+      localPlayer: {
+        ...renderPlayer,
+        isLocal: true
+      },
+      players: [
+        {
+          ...renderPlayer,
+          isLocal: true
+        },
+        {
+          username: "zoe",
+          ship: {
+            ...player,
+            position: {
+              x: player.position.x + 90,
+              y: player.position.y
+            }
+          },
+          color: "#ff7a90",
+          isThrusting: false
+        }
+      ],
+      projectiles: [],
+      asteroids: [],
+      explosions: [],
+      timeSeconds: 1
+    })
+
+    expect(context.operations).toContain("fillText:zoe")
   })
 
   it("draws player markers on the minimap", () => {

@@ -23,7 +23,9 @@ export const gameConfig = {
   asteroidMaxSpeedMultiplier: 2.4,
   initialAsteroidTarget: 4,
   maxAsteroidTarget: 34,
-  asteroidPressureStep: 5,
+  asteroidSpawnPressureStep: 12,
+  asteroidSpeedPressureStep: 12,
+  asteroidSpeedMultiplierStep: 0.06,
   asteroidExtraLargeChance: 0.06,
   asteroidRadius: {
     small: 18,

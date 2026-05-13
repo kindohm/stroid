@@ -2,3 +2,4 @@
   - mike style
   - caveman
   - frontend design
+  - lobby (when dealing with lobby/user/room logic)

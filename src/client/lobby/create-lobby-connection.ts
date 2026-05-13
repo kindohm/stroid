@@ -1,12 +1,25 @@
 import type { Asteroid, Projectile } from "../../shared/game-types"
-import type { AsteroidNamePools, ClientLobbyMessage, NetworkPlayerShip, ServerLobbyMessage } from "../../shared/lobby-types"
+import type {
+  AsteroidNamePools,
+  ClientLobbyMessage,
+  NetworkPlayerShip,
+  ServerLobbyMessage
+} from "../../shared/lobby-types"
 
 type CreateLobbyConnectionArgs = {
+  onUsernameAccepted: (message: Extract<ServerLobbyMessage, { type: "usernameAccepted" }>) => void
+  onUsernameRejected: (message: Extract<ServerLobbyMessage, { type: "usernameRejected" }>) => void
+  onLobbyList: (message: Extract<ServerLobbyMessage, { type: "lobbyList" }>) => void
+  onLobbyCreated: (message: Extract<ServerLobbyMessage, { type: "lobbyCreated" }>) => void
+  onLobbyNotFound: (message: Extract<ServerLobbyMessage, { type: "lobbyNotFound" }>) => void
+  onLobbyJoinRejected: (message: Extract<ServerLobbyMessage, { type: "lobbyJoinRejected" }>) => void
   onState: (message: Extract<ServerLobbyMessage, { type: "lobbyState" }>) => void
   onGameStarted: (message: Extract<ServerLobbyMessage, { type: "gameStarted" }>) => void
   onPlayerState: (message: Extract<ServerLobbyMessage, { type: "playerState" }>) => void
+  onPlayerDestroyed: (message: Extract<ServerLobbyMessage, { type: "playerDestroyed" }>) => void
   onProjectileFired: (message: Extract<ServerLobbyMessage, { type: "projectileFired" }>) => void
   onAsteroidState: (message: Extract<ServerLobbyMessage, { type: "asteroidState" }>) => void
+  onAsteroidDestroyed: (message: Extract<ServerLobbyMessage, { type: "asteroidDestroyed" }>) => void
   onScoreState: (message: Extract<ServerLobbyMessage, { type: "scoreState" }>) => void
   onLifeState: (message: Extract<ServerLobbyMessage, { type: "lifeState" }>) => void
   onGameOver: (message: Extract<ServerLobbyMessage, { type: "gameOver" }>) => void
@@ -19,19 +32,68 @@ const createSocketUrl = () => {
   return `${protocol}//${window.location.host}/ws`
 }
 
-const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessage | undefined => {
+export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessage | undefined => {
   try {
     const message = JSON.parse(String(data)) as Partial<ServerLobbyMessage>
+
+    if (message.type === "usernameAccepted" && typeof message.username === "string") {
+      return {
+        type: "usernameAccepted",
+        username: message.username
+      }
+    }
+
+    if (message.type === "usernameRejected" && message.reason === "blank") {
+      return {
+        type: "usernameRejected",
+        reason: "blank"
+      }
+    }
+
+    if (message.type === "lobbyList" && Array.isArray(message.lobbies)) {
+      return {
+        type: "lobbyList",
+        lobbies: message.lobbies
+      } as ServerLobbyMessage
+    }
+
+    if (message.type === "lobbyCreated" && typeof message.lobby === "object" && message.lobby) {
+      return {
+        type: "lobbyCreated",
+        lobby: message.lobby
+      } as ServerLobbyMessage
+    }
+
+    if (message.type === "lobbyNotFound" && typeof message.slug === "string") {
+      return {
+        type: "lobbyNotFound",
+        slug: message.slug
+      }
+    }
+
+    if (
+      message.type === "lobbyJoinRejected" &&
+      (message.reason === "notFound" || message.reason === "gameInProgress" || message.reason === "missingUsername")
+    ) {
+      return {
+        type: "lobbyJoinRejected",
+        reason: message.reason
+      }
+    }
 
     if (
       (message.type === "lobbyState" || message.type === "gameStarted") &&
       Array.isArray(message.players) &&
+      typeof message.slug === "string" &&
+      typeof message.hostId === "string" &&
       typeof message.selfId === "string" &&
       typeof message.asteroidNames === "object" &&
       message.asteroidNames
     ) {
       return {
         type: message.type,
+        slug: message.slug,
+        hostId: message.hostId,
         selfId: message.selfId,
         players: message.players,
         asteroidNames: message.asteroidNames
@@ -41,6 +103,14 @@ const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessage | un
     if (message.type === "playerState" && typeof message.playerId === "string" && typeof message.ship === "object") {
       return {
         type: "playerState",
+        playerId: message.playerId,
+        ship: message.ship as NetworkPlayerShip
+      }
+    }
+
+    if (message.type === "playerDestroyed" && typeof message.playerId === "string" && typeof message.ship === "object") {
+      return {
+        type: "playerDestroyed",
         playerId: message.playerId,
         ship: message.ship as NetworkPlayerShip
       }
@@ -64,6 +134,13 @@ const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessage | un
         type: "asteroidState",
         asteroids: message.asteroids as Asteroid[]
       }
+    }
+
+    if (message.type === "asteroidDestroyed" && typeof message.asteroid === "object" && message.asteroid) {
+      return {
+        type: "asteroidDestroyed",
+        asteroid: message.asteroid
+      } as ServerLobbyMessage
     }
 
     if (message.type === "scoreState" && typeof message.scores === "object" && message.scores) {
@@ -104,11 +181,19 @@ const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessage | un
 }
 
 export const createLobbyConnection = ({
+  onUsernameAccepted,
+  onUsernameRejected,
+  onLobbyList,
+  onLobbyCreated,
+  onLobbyNotFound,
+  onLobbyJoinRejected,
   onState,
   onGameStarted,
   onPlayerState,
+  onPlayerDestroyed,
   onProjectileFired,
   onAsteroidState,
+  onAsteroidDestroyed,
   onScoreState,
   onLifeState,
   onGameOver,
@@ -129,6 +214,36 @@ export const createLobbyConnection = ({
   socket.addEventListener("message", (event) => {
     const message = parseServerMessage(event.data)
 
+    if (message?.type === "usernameAccepted") {
+      onUsernameAccepted(message)
+      return
+    }
+
+    if (message?.type === "usernameRejected") {
+      onUsernameRejected(message)
+      return
+    }
+
+    if (message?.type === "lobbyList") {
+      onLobbyList(message)
+      return
+    }
+
+    if (message?.type === "lobbyCreated") {
+      onLobbyCreated(message)
+      return
+    }
+
+    if (message?.type === "lobbyNotFound") {
+      onLobbyNotFound(message)
+      return
+    }
+
+    if (message?.type === "lobbyJoinRejected") {
+      onLobbyJoinRejected(message)
+      return
+    }
+
     if (message?.type === "gameStarted") {
       onGameStarted(message)
       return
@@ -144,6 +259,11 @@ export const createLobbyConnection = ({
       return
     }
 
+    if (message?.type === "playerDestroyed") {
+      onPlayerDestroyed(message)
+      return
+    }
+
     if (message?.type === "projectileFired") {
       onProjectileFired(message)
       return
@@ -151,6 +271,11 @@ export const createLobbyConnection = ({
 
     if (message?.type === "asteroidState") {
       onAsteroidState(message)
+      return
+    }
+
+    if (message?.type === "asteroidDestroyed") {
+      onAsteroidDestroyed(message)
       return
     }
 
@@ -170,11 +295,49 @@ export const createLobbyConnection = ({
   })
 
   return {
-    join: (username: string, asteroidNames?: AsteroidNamePools) => {
+    setUsername: (username: string) => {
+      const message: ClientLobbyMessage = {
+        type: "setUsername",
+        username
+      }
+
+      socket.send(JSON.stringify(message))
+    },
+    rename: (username: string) => {
+      const message: ClientLobbyMessage = {
+        type: "renamePlayer",
+        username
+      }
+
+      socket.send(JSON.stringify(message))
+    },
+    createLobby: (asteroidNames?: AsteroidNamePools) => {
+      const message: ClientLobbyMessage = {
+        type: "createLobby",
+        asteroidNames
+      }
+
+      socket.send(JSON.stringify(message))
+    },
+    join: (slug: string, asteroidNames?: AsteroidNamePools) => {
       const message: ClientLobbyMessage = {
         type: "joinLobby",
-        username,
+        slug,
         asteroidNames
+      }
+
+      socket.send(JSON.stringify(message))
+    },
+    leaveLobby: () => {
+      const message: ClientLobbyMessage = {
+        type: "leaveLobby"
+      }
+
+      socket.send(JSON.stringify(message))
+    },
+    listLobbies: () => {
+      const message: ClientLobbyMessage = {
+        type: "listLobbies"
       }
 
       socket.send(JSON.stringify(message))
@@ -203,9 +366,10 @@ export const createLobbyConnection = ({
 
       socket.send(JSON.stringify(message))
     },
-    sendPlayerHit: () => {
+    sendPlayerHit: (ship: NetworkPlayerShip) => {
       const message: ClientLobbyMessage = {
-        type: "playerHit"
+        type: "playerHit",
+        ship
       }
 
       socket.send(JSON.stringify(message))

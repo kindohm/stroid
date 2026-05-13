@@ -4,5 +4,5 @@ export const getAsteroidSpawnTarget = (asteroidsSpawned: number, asteroidsDestro
   Math.min(
     gameConfig.maxAsteroidTarget,
     gameConfig.initialAsteroidTarget +
-      Math.floor((asteroidsSpawned + asteroidsDestroyed) / gameConfig.asteroidPressureStep)
+      Math.floor((asteroidsSpawned + asteroidsDestroyed) / gameConfig.asteroidSpawnPressureStep)
   )
