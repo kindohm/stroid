@@ -1,0 +1,4 @@
+- use the following skills:
+  - mike style
+  - caveman
+  - frontend design
