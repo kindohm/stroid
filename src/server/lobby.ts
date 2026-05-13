@@ -121,7 +121,11 @@ const parseClientMessage = (data: WebSocket.RawData): ClientLobbyMessage | undef
     if (message.type === "joinLobby" && typeof message.username === "string") {
       return {
         type: "joinLobby",
-        username: sanitizeUsername(message.username)
+        username: sanitizeUsername(message.username),
+        asteroidNames:
+          typeof message.asteroidNames === "object" && message.asteroidNames
+            ? sanitizeAsteroidNames(message.asteroidNames, defaultAsteroidNames)
+            : undefined
       }
     }
 
@@ -502,8 +506,11 @@ export const createLobby = () => {
       }
 
       if (message.type === "setAsteroidNames") {
-        asteroidNames = message.asteroidNames
-        broadcastLobbyState()
+        if (client.username) {
+          asteroidNames = message.asteroidNames
+          broadcastLobbyState()
+        }
+
         return
       }
 
@@ -534,6 +541,10 @@ export const createLobby = () => {
       }
 
       if (message.username.length > 0) {
+        if (getPlayers().length === 0 && message.asteroidNames) {
+          asteroidNames = message.asteroidNames
+        }
+
         client.username = message.username
         broadcastLobbyState()
         broadcastScoreState()

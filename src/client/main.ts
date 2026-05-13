@@ -35,6 +35,7 @@ const asteroidNameLabels: Record<AsteroidNameSize, string> = {
   medium: "medium",
   small: "small"
 }
+const asteroidNameStorageKey = "stroid.asteroidNames"
 
 const app = document.querySelector<HTMLDivElement>("#app")
 
@@ -208,6 +209,13 @@ const isPlayerEliminated = (lives: LifeState | undefined, playerId: string) =>
 
 const formatAsteroidNameList = (names: string[]) => names.join("\n")
 
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+
 const parseAsteroidNameList = (value: string) =>
   value
     .split(/[\n,]/)
@@ -224,6 +232,50 @@ const parseAsteroidNameInputs = (container: ParentNode): AsteroidNamePools =>
       [size]: names.length > 0 ? names : defaultAsteroidNames[size]
     }
   }, {} as AsteroidNamePools)
+
+const sanitizeAsteroidNamePools = (value: unknown): AsteroidNamePools | undefined => {
+  if (!value || typeof value !== "object") {
+    return undefined
+  }
+
+  const source = value as Partial<Record<AsteroidNameSize, unknown>>
+
+  return asteroidNameSizes.reduce((pools, size) => {
+    const names = Array.isArray(source[size])
+      ? source[size]
+          .filter((name): name is string => typeof name === "string")
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0)
+      : []
+
+    return {
+      ...pools,
+      [size]: names.length > 0 ? names : defaultAsteroidNames[size]
+    }
+  }, {} as AsteroidNamePools)
+}
+
+const loadStoredAsteroidNames = (): AsteroidNamePools | undefined => {
+  try {
+    const stored = localStorage.getItem(asteroidNameStorageKey)
+
+    if (!stored) {
+      return undefined
+    }
+
+    return sanitizeAsteroidNamePools(JSON.parse(stored))
+  } catch {
+    return undefined
+  }
+}
+
+const saveStoredAsteroidNames = (asteroidNames: AsteroidNamePools) => {
+  try {
+    localStorage.setItem(asteroidNameStorageKey, JSON.stringify(asteroidNames))
+  } catch {
+    // Local storage is best-effort; the live lobby should keep working without it.
+  }
+}
 
 const renderScorePanel = (scores: ScoreState, previousScores?: ScoreState) => {
   const panel = document.querySelector<HTMLElement>(".score-panel")
@@ -422,6 +474,23 @@ const startGame = (players: LobbyPlayer[], selfId: string) => {
   app.innerHTML = `
     <canvas class="game-canvas" aria-label="Stroid game map"></canvas>
     <aside class="score-panel" aria-label="Scores"></aside>
+    <aside class="control-key" aria-label="Keyboard controls">
+      <div class="control-key-title">flight keys</div>
+      <dl>
+        <div>
+          <dt><kbd>↑</kbd></dt>
+          <dd>thrust</dd>
+        </div>
+        <div>
+          <dt><kbd>←</kbd><kbd>→</kbd></dt>
+          <dd>turn</dd>
+        </div>
+        <div>
+          <dt><kbd>Space</kbd></dt>
+          <dd>fire</dd>
+        </div>
+      </dl>
+    </aside>
   `
   renderPlayerHeader()
   renderScorePanel(activeGame.scores)
@@ -750,7 +819,8 @@ const renderLobby = () => {
   cancelAnimationFrame(animationFrame)
   keyboard?.destroy()
   let lobbyPlayers: LobbyPlayer[] = []
-  let asteroidNames: AsteroidNamePools = defaultAsteroidNames
+  const storedAsteroidNames = loadStoredAsteroidNames()
+  let asteroidNames: AsteroidNamePools = storedAsteroidNames ?? defaultAsteroidNames
   let connectionStatus = "connecting"
   let selfId = ""
   activeGame = undefined
@@ -783,7 +853,7 @@ const renderLobby = () => {
           ${asteroidNameSizes.map((size) => `
             <label>
               <span>${asteroidNameLabels[size]}</span>
-              <textarea data-asteroid-size="${size}" rows="2">${formatAsteroidNameList(asteroidNames[size])}</textarea>
+              <textarea data-asteroid-size="${size}" rows="2">${escapeHtml(formatAsteroidNameList(asteroidNames[size]))}</textarea>
             </label>
           `).join("")}
         </section>
@@ -851,7 +921,8 @@ const renderLobby = () => {
     currentUsername = username
     input.disabled = true
     joinButton.disabled = true
-    lobbyConnection?.join(username)
+    saveStoredAsteroidNames(asteroidNames)
+    lobbyConnection?.join(username, asteroidNames)
     renderPlayerHeader()
     updateLobby()
   })
@@ -864,7 +935,10 @@ const renderLobby = () => {
 
   asteroidNameEditor.addEventListener("change", () => {
     asteroidNames = parseAsteroidNameInputs(asteroidNameEditor)
-    lobbyConnection?.setAsteroidNames(asteroidNames)
+    saveStoredAsteroidNames(asteroidNames)
+    if (currentUsername.length > 0) {
+      lobbyConnection?.setAsteroidNames(asteroidNames)
+    }
     updateLobby()
   })
 
@@ -873,7 +947,9 @@ const renderLobby = () => {
     onState: (message) => {
       selfId = message.selfId
       lobbyPlayers = message.players
-      asteroidNames = message.asteroidNames
+      if (currentUsername.length > 0 || message.players.length > 0 || !storedAsteroidNames) {
+        asteroidNames = message.asteroidNames
+      }
       currentUsername =
         message.players.find((player) => player.id === message.selfId)?.username ?? currentUsername
       if (activeGame) {

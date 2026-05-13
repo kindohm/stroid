@@ -54,6 +54,7 @@ export type ClientLobbyMessage =
   | {
       type: "joinLobby"
       username: string
+      asteroidNames?: AsteroidNamePools
     }
   | {
       type: "setAsteroidNames"

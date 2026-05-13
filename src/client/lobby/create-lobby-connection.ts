@@ -170,10 +170,11 @@ export const createLobbyConnection = ({
   })
 
   return {
-    join: (username: string) => {
+    join: (username: string, asteroidNames?: AsteroidNamePools) => {
       const message: ClientLobbyMessage = {
         type: "joinLobby",
-        username
+        username,
+        asteroidNames
       }
 
       socket.send(JSON.stringify(message))
