@@ -1,0 +1,107 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+env:
+  APPNAME: stroid
+  NODE_VERSION: 24.13.0
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Verify deploy host
+        run: |
+          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.DEPLOY_HOST }} << EOF
+            set -euo pipefail
+
+            test -r /home/deploy/.nvm/nvm.sh
+            test -d /opt/${APPNAME}/app/shared
+            test -f /opt/${APPNAME}/app/shared/.env
+            sudo -n /usr/bin/systemctl status "${APPNAME}" >/dev/null || STATUS_CODE="\$?"
+
+            if [ "\${STATUS_CODE:-0}" -ne 0 ] && [ "\${STATUS_CODE:-0}" -ne 3 ]; then
+              exit "\$STATUS_CODE"
+            fi
+          EOF
+
+      - name: Create release directory
+        run: |
+          RELEASE_ID="$(date +%Y%m%d%H%M%S)"
+          echo "RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
+          echo "RELEASE_DIR=/opt/${APPNAME}/app/releases/$RELEASE_ID" >> "$GITHUB_ENV"
+
+          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.DEPLOY_HOST }} \
+            "mkdir -p /opt/${APPNAME}/app/releases/$RELEASE_ID"
+
+      - name: Copy code to release directory
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude "node_modules" \
+            --exclude ".env" \
+            ./ \
+            deploy@${{ secrets.DEPLOY_HOST }}:${RELEASE_DIR}/
+
+      - name: Install production dependencies and activate release
+        run: |
+          ssh -i ~/.ssh/deploy_key deploy@${{ secrets.DEPLOY_HOST }} << EOF
+            set -euo pipefail
+
+            APPNAME="${APPNAME}"
+            NODE_VERSION="${NODE_VERSION}"
+            RELEASE_DIR="${RELEASE_DIR}"
+            SHARED_DIR="/opt/${APPNAME}/app/shared"
+            CURRENT_LINK="/opt/${APPNAME}/app/current"
+            SERVICE_NAME="${APPNAME}"
+
+            export NVM_DIR="/home/deploy/.nvm"
+            source "\$NVM_DIR/nvm.sh"
+
+            cd "\$RELEASE_DIR"
+
+            ln -sfn "\$SHARED_DIR/.env" "\$RELEASE_DIR/.env"
+
+            nvm install "\$NODE_VERSION"
+            nvm use "\$NODE_VERSION"
+
+            npm ci --omit=dev
+
+            ln -sfn "\$RELEASE_DIR" "\$CURRENT_LINK"
+
+            sudo -n /usr/bin/systemctl restart "\$SERVICE_NAME"
+            sudo -n /usr/bin/systemctl status "\$SERVICE_NAME"
+          EOF
