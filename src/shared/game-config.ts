@@ -1,0 +1,30 @@
+export const gameConfig = {
+  mapTilesWide: 100,
+  mapTilesTall: 100,
+  tileSize: 48,
+  shipRadius: 18,
+  turnSpeed: Math.PI * 1.8,
+  thrustAcceleration: 620,
+  dragPerSecond: 0.18,
+  maxSpeed: 820,
+  projectileRadius: 3,
+  projectileSpeed: 980,
+  projectileTtlSeconds: 1.8,
+  fireCooldownSeconds: 0.375,
+  playerStateSendIntervalMs: 33,
+  asteroidStateBroadcastIntervalMs: 33,
+  remotePlayerSmoothingPerSecond: 18,
+  asteroidMinSpeed: 70,
+  asteroidMaxSpeed: 190,
+  asteroidMaxSpeedMultiplier: 2.4,
+  initialAsteroidTarget: 4,
+  maxAsteroidTarget: 34,
+  asteroidPressureStep: 5,
+  asteroidExtraLargeChance: 0.06,
+  asteroidRadius: {
+    small: 18,
+    medium: 32,
+    large: 54,
+    extraLarge: 82
+  }
+} as const
