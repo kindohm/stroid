@@ -21,6 +21,7 @@ export const sanitizeAsteroidNames = (value: unknown, fallback: AsteroidNamePool
     extraLarge: sanitizeList("extraLarge"),
     large: sanitizeList("large"),
     medium: sanitizeList("medium"),
-    small: sanitizeList("small")
+    small: sanitizeList("small"),
+    boss: sanitizeList("boss")
   }
 }

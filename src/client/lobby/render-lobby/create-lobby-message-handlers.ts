@@ -149,6 +149,35 @@ export const createLobbyMessageHandlers = ({
       }
     }
   },
+  onBossState: (message) => {
+    if (state.activeGame) {
+      state.activeGame.boss = message.boss
+      state.activeGame.bossPreSpawnActive = message.preSpawnActive
+      state.activeGame.nextBossWindowAt = message.nextBossWindowAt
+      state.activeGame.bossIntervalMs = message.bossIntervalMs
+    }
+  },
+  onBossHit: (message) => {
+    if (state.activeGame) {
+      state.activeGame.boss = message.boss
+      state.gameAudio?.playAsteroidDestroyed()
+    }
+  },
+  onBossDefeated: (message) => {
+    if (state.activeGame) {
+      state.activeGame.boss = undefined
+      state.activeGame.bossPreSpawnActive = false
+      state.incomingExplosions = [
+        ...state.incomingExplosions,
+        {
+          position: message.boss.position,
+          color: "#fff4a6",
+          ageSeconds: 0
+        }
+      ]
+      state.gameAudio?.playAsteroidDestroyed()
+    }
+  },
   onPowerUpCollected: (message) => {
     if (state.activeGame) {
       state.activeGame.powerUps = state.activeGame.powerUps.filter((powerUp) => powerUp.id !== message.powerUp.id)

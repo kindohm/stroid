@@ -76,6 +76,14 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
             <span>max ship speed</span>
             <input name="maxShipSpeed" type="number" min="${roomSettingsBounds.maxShipSpeed.min}" max="${roomSettingsBounds.maxShipSpeed.max}" step="${roomSettingsBounds.maxShipSpeed.step}" value="${model.roomSettings.maxShipSpeed}" ${!isHost || state.activeGame ? "disabled" : ""} />
           </label>
+          <label>
+            <span>boss interval minutes</span>
+            <input name="bossIntervalMinutes" type="number" min="${roomSettingsBounds.bossIntervalMinutes.min}" max="${roomSettingsBounds.bossIntervalMinutes.max}" step="${roomSettingsBounds.bossIntervalMinutes.step}" value="${model.roomSettings.bossIntervalMinutes}" ${!isHost || state.activeGame ? "disabled" : ""} />
+          </label>
+          <label>
+            <span>boss hp per player</span>
+            <input name="bossHealthPerPlayer" type="number" min="${roomSettingsBounds.bossHealthPerPlayer.min}" max="${roomSettingsBounds.bossHealthPerPlayer.max}" step="${roomSettingsBounds.bossHealthPerPlayer.step}" value="${model.roomSettings.bossHealthPerPlayer}" ${!isHost || state.activeGame ? "disabled" : ""} />
+          </label>
           <label class="settings-toggle">
             <input name="friendlyFire" type="checkbox" ${model.roomSettings.friendlyFire ? "checked" : ""} ${!isHost || state.activeGame ? "disabled" : ""} />
             <span>friendly fire + collisions</span>

@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto"
 import type { WebSocket } from "ws"
+import { createBossAsteroid } from "../../../game/create-boss-asteroid"
+import { createBossDefeatAsteroids } from "../../../game/create-boss-defeat-asteroids"
+import { updateBossAsteroid } from "../../../game/update-boss-asteroid"
 import { gameConfig } from "../../../shared/game-config"
-import type { Asteroid } from "../../../shared/game-types"
+import type { Asteroid, BossAsteroid } from "../../../shared/game-types"
 import type {
   AsteroidNamePools,
   ClientLobbyMessage,
@@ -9,7 +12,7 @@ import type {
   LobbySummary,
   ServerLobbyMessage
 } from "../../../shared/lobby-types"
-import { defaultRoomSettings, sanitizeRoomSettings, type RoomSettings } from "../../../shared/room-settings"
+import { createGameWorld, defaultRoomSettings, sanitizeRoomSettings, type RoomSettings } from "../../../shared/room-settings"
 import { asteroidNameSizeByAsteroidSize } from "../asteroid-name-size-by-asteroid-size"
 import { createLobbyAsteroids } from "../create-lobby-asteroids"
 import { createLobbyBroadcaster } from "../create-lobby-broadcaster"
@@ -48,6 +51,12 @@ export const createLobby = ({
   let settings: RoomSettings = defaultRoomSettings
   let gameInProgress = false
   let gameOver = false
+  let bossAsteroid: BossAsteroid | undefined
+  let bossPreSpawnActive = false
+  let bossId = 0
+  let bossInterval: ReturnType<typeof setInterval> | undefined
+  let lastBossTick = Date.now()
+  let nextBossWindowAt = Date.now()
 
   const getPlayers = () => getLobbyPlayers(clients)
 
@@ -104,6 +113,16 @@ export const createLobby = ({
     })
   }
 
+  const broadcastBossState = () => {
+    broadcaster.sendToJoined({
+      type: "bossState",
+      boss: bossAsteroid,
+      preSpawnActive: bossPreSpawnActive,
+      nextBossWindowAt,
+      bossIntervalMs: settings.bossIntervalMinutes * 60 * 1000
+    })
+  }
+
   const broadcastGameOver = () => {
     broadcaster.sendToJoined({
       type: "gameOver",
@@ -133,11 +152,13 @@ export const createLobby = ({
     getAsteroidNames: () => asteroidNames,
     getSettings: () => settings,
     isFrozen: powerUpEffects.hasActiveAsteroidFreeze,
+    canSpawn: () => !bossPreSpawnActive && !bossAsteroid,
     onChanged: broadcastAsteroidState
   })
 
   const lobbyPowerUps = createLobbyPowerUps({
     getSettings: () => settings,
+    canSpawn: () => !bossPreSpawnActive && !bossAsteroid,
     onChanged: (nextPowerUps) => {
       if (powerUpEffects.expire()) {
         broadcastPowerUpEffectState()
@@ -166,6 +187,69 @@ export const createLobby = ({
     })
   }
 
+  const createBossId = () => {
+    bossId += 1
+    return `boss-${bossId}`
+  }
+
+  const getBossName = () => {
+    const names = asteroidNames.boss
+
+    return names[Math.floor(Math.random() * names.length)] ?? "boss"
+  }
+
+  const stopBossInterval = () => {
+    if (bossInterval) {
+      clearInterval(bossInterval)
+      bossInterval = undefined
+    }
+  }
+
+  const startBossPreSpawn = () => {
+    if (bossPreSpawnActive || bossAsteroid || !gameInProgress || gameOver) {
+      return
+    }
+
+    bossPreSpawnActive = true
+    broadcastBossState()
+  }
+
+  const spawnBoss = () => {
+    const maxHealth = Math.max(1, getPlayers().length) * settings.bossHealthPerPlayer
+
+    bossAsteroid = createBossAsteroid(createBossId(), getBossName(), createGameWorld(settings), maxHealth)
+    bossPreSpawnActive = false
+    broadcastBossState()
+  }
+
+  const startBossInterval = () => {
+    stopBossInterval()
+    bossInterval = setInterval(() => {
+      if (!gameInProgress || gameOver) {
+        return
+      }
+
+      const now = Date.now()
+
+      if (!bossPreSpawnActive && !bossAsteroid && now >= nextBossWindowAt) {
+        startBossPreSpawn()
+      }
+
+      if (bossPreSpawnActive && lobbyAsteroids.getAsteroids().length === 0) {
+        spawnBoss()
+      }
+
+      if (bossAsteroid) {
+        const deltaSeconds = Math.min(0.1, (now - lastBossTick) / 1000)
+
+        bossAsteroid = updateBossAsteroid(bossAsteroid, deltaSeconds, createGameWorld(settings))
+        broadcastBossState()
+      }
+
+      lastBossTick = now
+    }, gameConfig.asteroidStateBroadcastIntervalMs)
+  }
+
   const broadcastGameStarted = () => {
     const players = getPlayers()
 
@@ -173,6 +257,11 @@ export const createLobby = ({
     livesByClientId.clear()
     asteroidStats.clear()
     powerUpEffects.clear()
+    bossAsteroid = undefined
+    bossPreSpawnActive = false
+    bossId = 0
+    lastBossTick = Date.now()
+    nextBossWindowAt = lastBossTick + settings.bossIntervalMinutes * 60 * 1000
     players.forEach((player) => {
       livesByClientId.set(player.id, settings.playerLives)
     })
@@ -190,10 +279,12 @@ export const createLobby = ({
     lobbyPowerUps.reset()
     lobbyAsteroids.start()
     lobbyPowerUps.start()
+    startBossInterval()
     clients.forEach(sendGameStarted)
     broadcastScoreState()
     broadcastLifeState()
     broadcastPowerUpEffectState()
+    broadcastBossState()
     onChanged?.()
   }
 
@@ -213,6 +304,7 @@ export const createLobby = ({
     gameInProgress = false
     lobbyAsteroids.stop()
     lobbyPowerUps.stop()
+    stopBossInterval()
     recordRecapEvent({
       type: "gameOver",
       elapsedSeconds: getElapsedSeconds(),
@@ -334,6 +426,55 @@ export const createLobby = ({
     broadcastPowerUpEffectState()
   }
 
+  const handleBossHit = (client: LobbyClient, bossIdToHit: string) => {
+    if (!client.username || !gameInProgress || gameOver || !bossAsteroid || bossAsteroid.id !== bossIdToHit) {
+      return
+    }
+
+    const nextBoss = {
+      ...bossAsteroid,
+      health: Math.max(0, bossAsteroid.health - 1)
+    }
+
+    scoresByClientId.set(
+      client.id,
+      (scoresByClientId.get(client.id) ?? 0) + gameConfig.bossProjectileHitScore
+    )
+
+    if (nextBoss.health > 0) {
+      bossAsteroid = nextBoss
+      broadcaster.sendToJoined({
+        type: "bossHit",
+        boss: bossAsteroid,
+        playerId: client.id,
+        scoreDelta: gameConfig.bossProjectileHitScore
+      })
+      broadcastScoreState()
+      broadcastBossState()
+      return
+    }
+
+    const defeatedBoss = nextBoss
+
+    getPlayers().forEach((player) => {
+      scoresByClientId.set(
+        player.id,
+        (scoresByClientId.get(player.id) ?? 0) + gameConfig.bossDefeatScorePerPlayer
+      )
+    })
+    bossAsteroid = undefined
+    bossPreSpawnActive = false
+    nextBossWindowAt = Date.now() + settings.bossIntervalMinutes * 60 * 1000
+    lobbyAsteroids.addAsteroids(createBossDefeatAsteroids(defeatedBoss, () => `boss-shard-${createBossId()}`))
+    broadcaster.sendToJoined({
+      type: "bossDefeated",
+      boss: defeatedBoss,
+      scoreDelta: gameConfig.bossDefeatScorePerPlayer
+    })
+    broadcastScoreState()
+    broadcastBossState()
+  }
+
   const broadcastPlayerState = (
     client: LobbyClient,
     ship: Extract<ClientLobbyMessage, { type: "playerState" }>["ship"]
@@ -367,6 +508,7 @@ export const createLobby = ({
     if (clients.size === 0) {
       lobbyAsteroids.stop()
       lobbyPowerUps.stop()
+      stopBossInterval()
       onEmpty?.(slug)
     }
   }
@@ -445,6 +587,11 @@ export const createLobby = ({
 
     if (message.type === "powerUpHit") {
       handlePowerUpHit(client, message.powerUpId)
+      return
+    }
+
+    if (message.type === "bossHit") {
+      handleBossHit(client, message.bossId)
     }
   }
 
@@ -497,6 +644,7 @@ export const createLobby = ({
     stop: () => {
       lobbyAsteroids.stop()
       lobbyPowerUps.stop()
+      stopBossInterval()
     }
   }
 }

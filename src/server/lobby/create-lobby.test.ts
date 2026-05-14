@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { createLobby } from "./create-lobby/create-lobby"
 import { createSocket } from "./create-socket-stub.test-helper"
 
@@ -14,6 +14,10 @@ const playerHitMessage = JSON.stringify({
 })
 
 describe("createLobby", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("broadcasts joined players to lobby clients", () => {
     const lobby = createLobby()
     const first = createSocket()
@@ -443,7 +447,9 @@ describe("createLobby", () => {
         asteroidDensity: 1,
         playerLives: 9,
         friendlyFire: true,
-        maxShipSpeed: 2400
+        maxShipSpeed: 2400,
+        bossIntervalMinutes: 3,
+        bossHealthPerPlayer: 40
       }
     }))
     host.listeners.get("message")?.(JSON.stringify({
@@ -453,7 +459,9 @@ describe("createLobby", () => {
         asteroidDensity: 0,
         playerLives: 1,
         friendlyFire: true,
-        maxShipSpeed: 800
+        maxShipSpeed: 800,
+        bossIntervalMinutes: 2,
+        bossHealthPerPlayer: 35
       }
     }))
 
@@ -466,6 +474,8 @@ describe("createLobby", () => {
           playerLives: number
           friendlyFire: boolean
           maxShipSpeed: number
+          bossIntervalMinutes: number
+          bossHealthPerPlayer: number
         }
       })
       .filter((message) => message.type === "lobbyState")
@@ -476,7 +486,9 @@ describe("createLobby", () => {
       asteroidDensity: 0,
       playerLives: 1,
       friendlyFire: true,
-      maxShipSpeed: 800
+      maxShipSpeed: 800,
+      bossIntervalMinutes: 2,
+      bossHealthPerPlayer: 35
     })
   })
 
@@ -505,6 +517,117 @@ describe("createLobby", () => {
       .find((message) => message.type === "gameOver")
 
     expect(gameOver?.type).toBe("gameOver")
+    lobby.stop()
+  })
+
+  it("spawns, scores, and defeats a boss encounter after asteroids are cleared", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+
+    const lobby = createLobby()
+    const socket = createSocket()
+
+    lobby.addClient(socket as never)
+
+    socket.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    socket.listeners.get("message")?.(JSON.stringify({
+      type: "setAsteroidNames",
+      asteroidNames: {
+        extraLarge: ["Mega Mabel"],
+        large: ["Larry"],
+        medium: ["Miriam"],
+        small: ["Sally"],
+        boss: ["The Big One"]
+      }
+    }))
+    socket.listeners.get("message")?.(JSON.stringify({
+      type: "setRoomSettings",
+      settings: {
+        mapSize: "standard",
+        asteroidDensity: 0,
+        playerLives: 3,
+        friendlyFire: false,
+        maxShipSpeed: 1640,
+        bossIntervalMinutes: 1,
+        bossHealthPerPlayer: 5
+      }
+    }))
+    socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+
+    vi.advanceTimersByTime(60_040)
+
+    const preSpawnState = socket.sent
+      .map((message) => JSON.parse(message) as { type: string; preSpawnActive?: boolean })
+      .filter((message) => message.type === "bossState")
+      .at(-1)
+
+    expect(preSpawnState?.preSpawnActive).toBe(true)
+
+    for (let guard = 0; guard < 20; guard += 1) {
+      const asteroidState = socket.sent
+        .map((message) => JSON.parse(message) as { type: string; asteroids?: Array<{ id: string }> })
+        .filter((message) => message.type === "asteroidState")
+        .at(-1)
+      const asteroid = asteroidState?.asteroids?.[0]
+
+      if (!asteroid) {
+        break
+      }
+
+      socket.listeners.get("message")?.(JSON.stringify({ type: "asteroidHit", asteroidId: asteroid.id }))
+    }
+
+    vi.advanceTimersByTime(40)
+
+    const bossState = socket.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        boss?: { id: string; name: string; health: number; maxHealth: number; radius: number }
+      })
+      .filter((message) => message.type === "bossState" && message.boss)
+      .at(-1)
+
+    expect(bossState?.boss).toEqual(expect.objectContaining({
+      name: "The Big One",
+      health: 5,
+      maxHealth: 5,
+      radius: 210
+    }))
+
+    const scoreBeforeBoss = socket.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        scores?: { teamScore: number; players: Array<{ username: string; score: number }> }
+      })
+      .filter((message) => message.type === "scoreState")
+      .at(-1)?.scores?.teamScore ?? 0
+
+    for (let hit = 0; hit < 5; hit += 1) {
+      socket.listeners.get("message")?.(JSON.stringify({ type: "bossHit", bossId: bossState?.boss?.id }))
+    }
+
+    const bossDefeated = socket.sent
+      .map((message) => JSON.parse(message) as { type: string; boss?: { name: string } })
+      .find((message) => message.type === "bossDefeated")
+    const scoreState = socket.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        scores?: { teamScore: number; players: Array<{ username: string; score: number }> }
+      })
+      .filter((message) => message.type === "scoreState")
+      .at(-1)
+    const shardState = socket.sent
+      .map((message) => JSON.parse(message) as { type: string; asteroids?: Array<{ size: string }> })
+      .filter((message) => message.type === "asteroidState")
+      .at(-1)
+
+    expect(bossDefeated?.boss?.name).toBe("The Big One")
+    expect(scoreState?.scores?.teamScore).toBe(scoreBeforeBoss + 750)
+    expect(scoreState?.scores?.players[0]).toEqual(expect.objectContaining({
+      username: "mike",
+      score: scoreBeforeBoss + 750
+    }))
+    expect(shardState?.asteroids?.filter((asteroid) => asteroid.size === "large")).toHaveLength(3)
     lobby.stop()
   })
 })

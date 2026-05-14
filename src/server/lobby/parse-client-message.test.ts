@@ -20,7 +20,9 @@ describe("parseClientMessage", () => {
         asteroidDensity: 2,
         playerLives: 4,
         friendlyFire: true,
-        maxShipSpeed: 1200
+        maxShipSpeed: 1200,
+        bossIntervalMinutes: 2,
+        bossHealthPerPlayer: 200
       }
     })))).toEqual({
       type: "setRoomSettings",
@@ -29,8 +31,20 @@ describe("parseClientMessage", () => {
         asteroidDensity: 1,
         playerLives: 4,
         friendlyFire: true,
-        maxShipSpeed: 1200
+        maxShipSpeed: 1200,
+        bossIntervalMinutes: 2,
+        bossHealthPerPlayer: 100
       }
+    })
+  })
+
+  it("parses boss hit messages", () => {
+    expect(parseClientMessage(Buffer.from(JSON.stringify({
+      type: "bossHit",
+      bossId: "boss-1"
+    })))).toEqual({
+      type: "bossHit",
+      bossId: "boss-1"
     })
   })
 })

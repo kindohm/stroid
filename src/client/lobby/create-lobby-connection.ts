@@ -1,4 +1,4 @@
-import type { Asteroid, Projectile } from "../../shared/game-types"
+import type { Asteroid, BossAsteroid, Projectile } from "../../shared/game-types"
 import type {
   AsteroidNamePools,
   ClientLobbyMessage,
@@ -24,6 +24,9 @@ export type CreateLobbyConnectionArgs = {
   onAsteroidState: (message: Extract<ServerLobbyMessage, { type: "asteroidState" }>) => void
   onAsteroidDestroyed: (message: Extract<ServerLobbyMessage, { type: "asteroidDestroyed" }>) => void
   onPowerUpState: (message: Extract<ServerLobbyMessage, { type: "powerUpState" }>) => void
+  onBossState: (message: Extract<ServerLobbyMessage, { type: "bossState" }>) => void
+  onBossHit: (message: Extract<ServerLobbyMessage, { type: "bossHit" }>) => void
+  onBossDefeated: (message: Extract<ServerLobbyMessage, { type: "bossDefeated" }>) => void
   onPowerUpCollected: (message: Extract<ServerLobbyMessage, { type: "powerUpCollected" }>) => void
   onPowerUpEffectState: (message: Extract<ServerLobbyMessage, { type: "powerUpEffectState" }>) => void
   onScoreState: (message: Extract<ServerLobbyMessage, { type: "scoreState" }>) => void
@@ -152,6 +155,21 @@ export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessa
       } as ServerLobbyMessage
     }
 
+    if (
+      message.type === "bossState" &&
+      typeof message.preSpawnActive === "boolean" &&
+      typeof message.nextBossWindowAt === "number" &&
+      typeof message.bossIntervalMs === "number"
+    ) {
+      return {
+        type: "bossState",
+        boss: typeof message.boss === "object" && message.boss ? message.boss as BossAsteroid : undefined,
+        preSpawnActive: message.preSpawnActive,
+        nextBossWindowAt: message.nextBossWindowAt,
+        bossIntervalMs: message.bossIntervalMs
+      }
+    }
+
     if (message.type === "asteroidDestroyed" && typeof message.asteroid === "object" && message.asteroid) {
       return {
         type: "asteroidDestroyed",
@@ -172,6 +190,34 @@ export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessa
         powerUp: message.powerUp,
         effectExpiresAt: message.effectExpiresAt
       } as ServerLobbyMessage
+    }
+
+    if (
+      message.type === "bossHit" &&
+      typeof message.playerId === "string" &&
+      typeof message.scoreDelta === "number" &&
+      typeof message.boss === "object" &&
+      message.boss
+    ) {
+      return {
+        type: "bossHit",
+        boss: message.boss as BossAsteroid,
+        playerId: message.playerId,
+        scoreDelta: message.scoreDelta
+      }
+    }
+
+    if (
+      message.type === "bossDefeated" &&
+      typeof message.scoreDelta === "number" &&
+      typeof message.boss === "object" &&
+      message.boss
+    ) {
+      return {
+        type: "bossDefeated",
+        boss: message.boss as BossAsteroid,
+        scoreDelta: message.scoreDelta
+      }
     }
 
     if (message.type === "powerUpEffectState" && Array.isArray(message.effects)) {
@@ -236,6 +282,9 @@ export const createLobbyConnection = ({
   onAsteroidState,
   onAsteroidDestroyed,
   onPowerUpState,
+  onBossState,
+  onBossHit,
+  onBossDefeated,
   onPowerUpCollected,
   onPowerUpEffectState,
   onScoreState,
@@ -328,6 +377,21 @@ export const createLobbyConnection = ({
       return
     }
 
+    if (message?.type === "bossState") {
+      onBossState(message)
+      return
+    }
+
+    if (message?.type === "bossHit") {
+      onBossHit(message)
+      return
+    }
+
+    if (message?.type === "bossDefeated") {
+      onBossDefeated(message)
+      return
+    }
+
     if (message?.type === "powerUpCollected") {
       onPowerUpCollected(message)
       return
@@ -413,6 +477,14 @@ export const createLobbyConnection = ({
       const message: ClientLobbyMessage = {
         type: "powerUpHit",
         powerUpId
+      }
+
+      socket.send(JSON.stringify(message))
+    },
+    sendBossHit: (bossId: string) => {
+      const message: ClientLobbyMessage = {
+        type: "bossHit",
+        bossId
       }
 
       socket.send(JSON.stringify(message))

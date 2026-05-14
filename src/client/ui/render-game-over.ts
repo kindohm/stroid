@@ -1,6 +1,6 @@
-import type { AsteroidStatsState, AsteroidNameSize, GameRecap, GameRecapEvent, ScoreState } from "../../shared/lobby-types"
+import type { AsteroidStatsState, RegularAsteroidNameSize, GameRecap, GameRecapEvent, ScoreState } from "../../shared/lobby-types"
 import type { AppState } from "../app/app-state"
-import { asteroidNameSizes } from "../lobby/asteroid-name-options"
+import { regularAsteroidNameSizes } from "../lobby/asteroid-name-options"
 
 const formatTime = (elapsedSeconds: number) => {
   const minutes = Math.floor(elapsedSeconds / 60)
@@ -164,8 +164,8 @@ export const renderGameOver = (
     const tableHead = document.createElement("thead")
     const tableBody = document.createElement("tbody")
     const headerRow = document.createElement("tr")
-    const rows = asteroidNameSizes
-      .flatMap((size: AsteroidNameSize) => {
+    const rows = regularAsteroidNameSizes
+      .flatMap((size: RegularAsteroidNameSize) => {
         const asteroidNames = new Set<string>()
 
         asteroidStats.players.forEach((player) => {

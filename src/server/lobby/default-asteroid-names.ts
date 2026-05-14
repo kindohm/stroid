@@ -4,5 +4,6 @@ export const defaultAsteroidNames: AsteroidNamePools = {
   extraLarge: ["Alpha"],
   large: ["Beta"],
   medium: ["Gamma"],
-  small: ["Omega"]
+  small: ["Omega"],
+  boss: ["boss"]
 }

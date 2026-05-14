@@ -1,4 +1,4 @@
-import type { ActivePowerUpEffect, Asteroid, PowerUp, Projectile } from "../../shared/game-types"
+import type { ActivePowerUpEffect, Asteroid, BossAsteroid, PowerUp, Projectile } from "../../shared/game-types"
 import type { LifeState, LobbyPlayer, NetworkPlayerShip, ScoreState } from "../../shared/lobby-types"
 import type { RoomSettings } from "../../shared/room-settings"
 import type { createKeyboardInput } from "../input/create-keyboard-input"
@@ -11,6 +11,10 @@ export type ActiveGame = {
   players: LobbyPlayer[]
   remoteTargets: Map<string, NetworkPlayerShip>
   asteroids: Asteroid[]
+  boss?: BossAsteroid
+  bossPreSpawnActive: boolean
+  nextBossWindowAt: number
+  bossIntervalMs: number
   powerUps: PowerUp[]
   powerUpEffects: ActivePowerUpEffect[]
   settings: RoomSettings

@@ -6,10 +6,11 @@ import { createGameWorld, type RoomSettings } from "../../shared/room-settings"
 
 type CreateLobbyPowerUpsArgs = {
   getSettings: () => RoomSettings
+  canSpawn?: () => boolean
   onChanged: (powerUps: PowerUp[]) => void
 }
 
-export const createLobbyPowerUps = ({ getSettings, onChanged }: CreateLobbyPowerUpsArgs) => {
+export const createLobbyPowerUps = ({ getSettings, canSpawn = () => true, onChanged }: CreateLobbyPowerUpsArgs) => {
   let powerUps: PowerUp[] = []
   let powerUpId = 0
   let powerUpInterval: ReturnType<typeof setInterval> | undefined
@@ -22,7 +23,8 @@ export const createLobbyPowerUps = ({ getSettings, onChanged }: CreateLobbyPower
   }
 
   const spawnPowerUp = () => {
-    if (powerUps.length >= gameConfig.powerUpMaxActive) {
+    if (!canSpawn() || powerUps.length >= gameConfig.powerUpMaxActive) {
+      nextSpawnAt = Date.now() + gameConfig.powerUpSpawnIntervalMs
       return
     }
 

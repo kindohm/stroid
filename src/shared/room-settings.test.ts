@@ -14,13 +14,17 @@ describe("roomSettings", () => {
       asteroidDensity: 7,
       playerLives: 22,
       friendlyFire: true,
-      maxShipSpeed: 120
+      maxShipSpeed: 120,
+      bossIntervalMinutes: 50,
+      bossHealthPerPlayer: 3
     })).toEqual({
       ...defaultRoomSettings,
       asteroidDensity: 1,
       playerLives: 9,
       friendlyFire: true,
-      maxShipSpeed: 800
+      maxShipSpeed: 800,
+      bossIntervalMinutes: 20,
+      bossHealthPerPlayer: 5
     })
   })
 
@@ -50,5 +54,7 @@ describe("roomSettings", () => {
     expect(settings.playerLives).toBe(9)
     expect(settings.friendlyFire).toBe(true)
     expect(settings.maxShipSpeed).toBe(2400)
+    expect(settings.bossIntervalMinutes).toBe(20)
+    expect(settings.bossHealthPerPlayer).toBe(100)
   })
 })

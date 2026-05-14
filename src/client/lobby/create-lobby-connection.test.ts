@@ -146,6 +146,44 @@ describe("parseServerMessage", () => {
     )
   })
 
+  it("parses boss state and defeat messages", () => {
+    const boss = {
+      id: "boss-1",
+      name: "boss",
+      radius: 210,
+      health: 24,
+      maxHealth: 25,
+      position: { x: 10, y: 20 },
+      velocity: { x: 12, y: 0 },
+      shape: [1, 0.9, 1.1]
+    }
+
+    expect(parseServerMessage(JSON.stringify({
+      type: "bossState",
+      preSpawnActive: false,
+      nextBossWindowAt: 123_000,
+      bossIntervalMs: 180_000,
+      boss
+    }))).toEqual(expect.objectContaining({
+      type: "bossState",
+      nextBossWindowAt: 123_000,
+      bossIntervalMs: 180_000,
+      boss: expect.objectContaining({
+        id: "boss-1",
+        health: 24
+      })
+    }))
+
+    expect(parseServerMessage(JSON.stringify({
+      type: "bossDefeated",
+      scoreDelta: 500,
+      boss
+    }))).toEqual(expect.objectContaining({
+      type: "bossDefeated",
+      scoreDelta: 500
+    }))
+  })
+
   it("parses powerup collection effect messages", () => {
     const message = parseServerMessage(JSON.stringify({
       type: "powerUpCollected",

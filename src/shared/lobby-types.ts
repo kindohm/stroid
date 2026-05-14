@@ -1,4 +1,4 @@
-import type { ActivePowerUpEffect, Asteroid, AsteroidSize, PowerUp, Projectile, Vector } from "./game-types"
+import type { ActivePowerUpEffect, Asteroid, AsteroidSize, BossAsteroid, PowerUp, Projectile, Vector } from "./game-types"
 import type { RoomSettings } from "./room-settings"
 
 export type LobbyPlayer = {
@@ -15,7 +15,8 @@ export type LobbySummary = {
   gameInProgress: boolean
 }
 
-export type AsteroidNameSize = "extraLarge" | "large" | "medium" | "small"
+export type AsteroidNameSize = "extraLarge" | "large" | "medium" | "small" | "boss"
+export type RegularAsteroidNameSize = Exclude<AsteroidNameSize, "boss">
 
 export type AsteroidNamePools = Record<AsteroidNameSize, string[]>
 
@@ -40,8 +41,8 @@ export type LifeState = {
 }
 
 export type PlayerAsteroidStats = LobbyPlayer & {
-  destroyedBySize: Record<AsteroidNameSize, number>
-  destroyedNamesBySize: Record<AsteroidNameSize, Record<string, number>>
+  destroyedBySize: Record<RegularAsteroidNameSize, number>
+  destroyedNamesBySize: Record<RegularAsteroidNameSize, Record<string, number>>
 }
 
 export type AsteroidStatsState = {
@@ -161,6 +162,10 @@ export type ClientLobbyMessage =
       powerUpId: string
     }
   | {
+      type: "bossHit"
+      bossId: string
+    }
+  | {
       type: "playerHit"
       ship: NetworkPlayerShip
       cause?: PlayerDeathCause
@@ -237,6 +242,13 @@ export type ServerLobbyMessage =
       powerUps: PowerUp[]
     }
   | {
+      type: "bossState"
+      boss?: BossAsteroid
+      preSpawnActive: boolean
+      nextBossWindowAt: number
+      bossIntervalMs: number
+    }
+  | {
       type: "asteroidDestroyed"
       asteroid: {
         id: string
@@ -250,6 +262,17 @@ export type ServerLobbyMessage =
       playerId: string
       powerUp: PowerUp
       effectExpiresAt: number
+    }
+  | {
+      type: "bossHit"
+      boss: BossAsteroid
+      playerId: string
+      scoreDelta: number
+    }
+  | {
+      type: "bossDefeated"
+      boss: BossAsteroid
+      scoreDelta: number
     }
   | {
       type: "powerUpEffectState"

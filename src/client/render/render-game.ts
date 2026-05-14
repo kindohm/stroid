@@ -1,5 +1,5 @@
 import { gameConfig } from "../../shared/game-config"
-import type { Asteroid, GameWorld, PlayerShip, PowerUp, PowerUpType, Projectile, Vector } from "../../shared/game-types"
+import type { Asteroid, BossAsteroid, GameWorld, PlayerShip, PowerUp, PowerUpType, Projectile, Vector } from "../../shared/game-types"
 
 export type RenderPlayerView = {
   username: string
@@ -25,6 +25,13 @@ type RenderGameArgs = {
   players: RenderPlayerView[]
   projectiles: Projectile[]
   asteroids: Asteroid[]
+  boss?: BossAsteroid
+  bossCountdown?: {
+    preSpawnActive: boolean
+    nextBossWindowAt: number
+    intervalMs: number
+    now: number
+  }
   powerUps?: PowerUp[]
   explosions: RenderExplosion[]
   timeSeconds: number
@@ -374,6 +381,71 @@ const drawAsteroids = (
   })
 }
 
+const drawBoss = (
+  context: CanvasRenderingContext2D,
+  camera: Vector,
+  viewport: Vector,
+  boss: BossAsteroid,
+  timeSeconds: number
+) => {
+  const screenPosition = worldToScreen(boss.position, camera, viewport)
+
+  if (!isOnScreen(screenPosition, viewport, boss.radius + 42)) {
+    return
+  }
+
+  const step = (Math.PI * 2) / boss.shape.length
+  const pulse = Math.sin(timeSeconds * 2.4) * 0.04
+
+  context.save()
+  context.translate(screenPosition.x, screenPosition.y)
+  context.rotate(timeSeconds * 0.08)
+  context.strokeStyle = "rgba(255, 244, 166, 0.96)"
+  context.fillStyle = "rgba(92, 54, 42, 0.72)"
+  context.lineWidth = 4
+  context.shadowColor = "rgba(255, 244, 166, 0.32)"
+  context.shadowBlur = 26
+  context.beginPath()
+
+  boss.shape.forEach((scale, index) => {
+    const angle = step * index
+    const radius = boss.radius * (scale + pulse)
+    const x = Math.cos(angle) * radius
+    const y = Math.sin(angle) * radius
+
+    if (index === 0) {
+      context.moveTo(x, y)
+      return
+    }
+
+    context.lineTo(x, y)
+  })
+
+  context.closePath()
+  context.fill()
+  context.stroke()
+  context.restore()
+
+  context.save()
+  context.font = "16px ui-monospace, SFMono-Regular, Menlo, monospace"
+  context.textAlign = "center"
+  context.textBaseline = "middle"
+  context.fillStyle = "rgba(5, 7, 10, 0.82)"
+  context.strokeStyle = "rgba(255, 244, 166, 0.82)"
+  context.lineWidth = 1.5
+
+  const labelWidth = Math.max(80, context.measureText(boss.name).width + 24)
+  const labelY = screenPosition.y - boss.radius - 24
+
+  context.beginPath()
+  context.roundRect(screenPosition.x - labelWidth / 2, labelY - 13, labelWidth, 26, 5)
+  context.fill()
+  context.stroke()
+  context.fillStyle = "rgba(255, 252, 232, 0.94)"
+  context.fillText(boss.name, screenPosition.x, labelY + 1)
+  context.restore()
+}
+
 const powerUpColorByType: Record<PowerUpType, string> = {
   shield: "#74ffe0",
   scatterShot: "#fff4a6",
@@ -460,6 +532,7 @@ const drawMiniMap = (
   players: RenderPlayerView[],
   projectiles: Projectile[],
   asteroids: Asteroid[],
+  boss: BossAsteroid | undefined,
   powerUps: PowerUp[]
 ) => {
   const width = 164
@@ -527,6 +600,17 @@ const drawMiniMap = (
     context.stroke()
   })
 
+  if (boss) {
+    const markerX = x + padding + (boss.position.x / world.width) * innerWidth
+    const markerY = y + padding + (boss.position.y / world.height) * innerHeight
+
+    context.strokeStyle = "rgba(255, 244, 166, 0.92)"
+    context.shadowBlur = 0
+    context.beginPath()
+    context.arc(markerX, markerY, 10, 0, Math.PI * 2)
+    context.stroke()
+  }
+
   powerUps.forEach((powerUp) => {
     const markerX = x + padding + (powerUp.position.x / world.width) * innerWidth
     const markerY = y + padding + (powerUp.position.y / world.height) * innerHeight
@@ -553,6 +637,71 @@ const drawHud = (context: CanvasRenderingContext2D, player: PlayerShip, username
   )
 }
 
+const drawBossHealth = (context: CanvasRenderingContext2D, viewport: Vector, boss: BossAsteroid) => {
+  const width = Math.min(420, viewport.x - 36)
+  const height = 18
+  const x = (viewport.x - width) / 2
+  const y = 24
+  const healthRatio = boss.maxHealth > 0 ? boss.health / boss.maxHealth : 0
+
+  context.save()
+  context.fillStyle = "rgba(5, 7, 10, 0.82)"
+  context.strokeStyle = "rgba(255, 244, 166, 0.74)"
+  context.lineWidth = 1.5
+  context.shadowColor = "rgba(0, 0, 0, 0.58)"
+  context.shadowBlur = 14
+  context.beginPath()
+  context.roundRect(x, y, width, height, 5)
+  context.fill()
+  context.stroke()
+  context.shadowBlur = 0
+  context.fillStyle = "rgba(255, 244, 166, 0.86)"
+  context.fillRect(x + 3, y + 3, Math.max(0, (width - 6) * healthRatio), height - 6)
+  context.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace"
+  context.textAlign = "center"
+  context.textBaseline = "middle"
+  context.fillStyle = "rgba(255, 252, 232, 0.96)"
+  context.fillText(`${boss.name} ${boss.health}/${boss.maxHealth}`, viewport.x / 2, y + height + 13)
+  context.restore()
+}
+
+const drawBossCountdown = (
+  context: CanvasRenderingContext2D,
+  viewport: Vector,
+  bossCountdown: NonNullable<RenderGameArgs["bossCountdown"]>
+) => {
+  const width = Math.min(320, viewport.x - 36)
+  const height = 10
+  const x = (viewport.x - width) / 2
+  const y = 24
+  const remainingMs = Math.max(0, bossCountdown.nextBossWindowAt - bossCountdown.now)
+  const ratio = bossCountdown.preSpawnActive
+    ? 1
+    : Math.min(1, remainingMs / Math.max(1, bossCountdown.intervalMs))
+  const label = bossCountdown.preSpawnActive
+    ? "boss window: clear asteroids"
+    : `boss window ${Math.ceil(remainingMs / 1000)}s`
+
+  context.save()
+  context.fillStyle = "rgba(5, 7, 10, 0.72)"
+  context.strokeStyle = "rgba(116, 255, 224, 0.38)"
+  context.lineWidth = 1
+  context.beginPath()
+  context.roundRect(x, y, width, height, 4)
+  context.fill()
+  context.stroke()
+  context.fillStyle = bossCountdown.preSpawnActive
+    ? "rgba(255, 244, 166, 0.82)"
+    : "rgba(116, 255, 224, 0.72)"
+  context.fillRect(x + 2, y + 2, Math.max(0, (width - 4) * ratio), height - 4)
+  context.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace"
+  context.textAlign = "center"
+  context.textBaseline = "middle"
+  context.fillStyle = "rgba(236, 248, 241, 0.82)"
+  context.fillText(label, viewport.x / 2, y + height + 12)
+  context.restore()
+}
+
 export const renderGame = ({
   context,
   viewport,
@@ -561,6 +710,8 @@ export const renderGame = ({
   players,
   projectiles,
   asteroids,
+  boss,
+  bossCountdown,
   powerUps = [],
   explosions,
   timeSeconds
@@ -573,6 +724,9 @@ export const renderGame = ({
   drawGrid(context, localPlayer.ship.position, viewport, world)
   drawBoundary(context, localPlayer.ship.position, viewport, world)
   drawAsteroids(context, localPlayer.ship.position, viewport, asteroids)
+  if (boss) {
+    drawBoss(context, localPlayer.ship.position, viewport, boss, timeSeconds)
+  }
   drawPowerUps(context, localPlayer.ship.position, viewport, powerUps, timeSeconds)
   drawProjectiles(context, localPlayer.ship.position, viewport, projectiles)
   drawExplosions(context, localPlayer.ship.position, viewport, explosions)
@@ -620,6 +774,11 @@ export const renderGame = ({
     drawShipLabel(context, localScreenPosition, localPlayer.username, localPlayer.color)
   }
 
-  drawMiniMap(context, viewport, world, players, projectiles, asteroids, powerUps)
+  drawMiniMap(context, viewport, world, players, projectiles, asteroids, boss, powerUps)
   drawHud(context, localPlayer.ship, localPlayer.username)
+  if (boss) {
+    drawBossHealth(context, viewport, boss)
+  } else if (bossCountdown) {
+    drawBossCountdown(context, viewport, bossCountdown)
+  }
 }

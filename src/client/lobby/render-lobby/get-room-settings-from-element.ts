@@ -8,6 +8,8 @@ export const getRoomSettingsFromElement = (
   const asteroidDensity = roomSettingsElement.querySelector<HTMLInputElement>("input[name='asteroidDensity']")
   const playerLives = roomSettingsElement.querySelector<HTMLInputElement>("input[name='playerLives']")
   const maxShipSpeed = roomSettingsElement.querySelector<HTMLInputElement>("input[name='maxShipSpeed']")
+  const bossIntervalMinutes = roomSettingsElement.querySelector<HTMLInputElement>("input[name='bossIntervalMinutes']")
+  const bossHealthPerPlayer = roomSettingsElement.querySelector<HTMLInputElement>("input[name='bossHealthPerPlayer']")
   const friendlyFire = roomSettingsElement.querySelector<HTMLInputElement>("input[name='friendlyFire']")
 
   return sanitizeRoomSettings({
@@ -15,6 +17,8 @@ export const getRoomSettingsFromElement = (
     asteroidDensity: Number(asteroidDensity?.value ?? fallback.asteroidDensity),
     playerLives: Number(playerLives?.value ?? fallback.playerLives),
     friendlyFire: friendlyFire?.checked ?? false,
-    maxShipSpeed: Number(maxShipSpeed?.value ?? fallback.maxShipSpeed)
+    maxShipSpeed: Number(maxShipSpeed?.value ?? fallback.maxShipSpeed),
+    bossIntervalMinutes: Number(bossIntervalMinutes?.value ?? fallback.bossIntervalMinutes),
+    bossHealthPerPlayer: Number(bossHealthPerPlayer?.value ?? fallback.bossHealthPerPlayer)
   })
 }

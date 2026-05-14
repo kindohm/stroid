@@ -29,6 +29,9 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
     players,
     remoteTargets: new Map(),
     asteroids: [],
+    bossPreSpawnActive: false,
+    nextBossWindowAt: Date.now() + settings.bossIntervalMinutes * 60 * 1000,
+    bossIntervalMs: settings.bossIntervalMinutes * 60 * 1000,
     powerUps: [],
     powerUpEffects: [],
     settings,
@@ -284,6 +287,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
     const gamePlayers = state.activeGame?.players ?? players
     const selfPlayer = gamePlayers.find((lobbyPlayer) => lobbyPlayer.id === selfId) ?? self
     const asteroids = state.activeGame?.asteroids ?? []
+    const boss = state.activeGame?.boss
     const powerUps = state.activeGame?.powerUps ?? []
     syncShips(gamePlayers)
 
@@ -372,6 +376,21 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
         state.lobbyConnection?.sendPowerUpHit(powerUp.id)
       }
     })
+    if (boss) {
+      const projectile = projectiles.find(
+        (nextProjectile) =>
+          localProjectileIds.has(nextProjectile.id) &&
+          !hitProjectileIds.has(nextProjectile.id) &&
+          Math.hypot(nextProjectile.position.x - boss.position.x, nextProjectile.position.y - boss.position.y) <=
+            boss.radius + gameConfig.projectileRadius
+      )
+
+      if (projectile) {
+        hitProjectileIds.add(projectile.id)
+        localProjectileIds.delete(projectile.id)
+        state.lobbyConnection?.sendBossHit(boss.id)
+      }
+    }
 
     const canLocalTakeFriendlyHit =
       settings.friendlyFire && canControlLocalShip && now >= invincibleUntil && !hasPowerUpEffect(selfId, "shield")
@@ -402,6 +421,16 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       )
 
       if (hitAsteroid) {
+        destroyLocalShip(updatedLocalShip, now, input.thrust, "asteroid")
+      }
+
+      if (
+        boss &&
+        Math.hypot(
+          updatedLocalShip.position.x - boss.position.x,
+          updatedLocalShip.position.y - boss.position.y
+        ) <= boss.radius + gameConfig.shipRadius
+      ) {
         destroyLocalShip(updatedLocalShip, now, input.thrust, "asteroid")
       }
     }
@@ -482,6 +511,15 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       players: renderPlayers,
       projectiles,
       asteroids,
+      boss,
+      bossCountdown: state.activeGame
+        ? {
+            preSpawnActive: state.activeGame.bossPreSpawnActive,
+            nextBossWindowAt: state.activeGame.nextBossWindowAt,
+            intervalMs: state.activeGame.bossIntervalMs,
+            now: Date.now()
+          }
+        : undefined,
       powerUps,
       explosions,
       timeSeconds: now / 1000

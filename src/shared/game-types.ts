@@ -57,3 +57,14 @@ export type Asteroid = {
   radius: number
   shape: number[]
 }
+
+export type BossAsteroid = {
+  id: string
+  name: string
+  position: Vector
+  velocity: Vector
+  radius: number
+  shape: number[]
+  health: number
+  maxHealth: number
+}

@@ -16,6 +16,8 @@ describe("getRoomSettingsFromElement", () => {
           "input[name='asteroidDensity']": createInput("0.75"),
           "input[name='playerLives']": createInput("4"),
           "input[name='maxShipSpeed']": createInput("1800"),
+          "input[name='bossIntervalMinutes']": createInput("7"),
+          "input[name='bossHealthPerPlayer']": createInput("40"),
           "input[name='friendlyFire']": createInput("", true)
         }
 
@@ -28,7 +30,9 @@ describe("getRoomSettingsFromElement", () => {
       asteroidDensity: 0.75,
       playerLives: 4,
       friendlyFire: true,
-      maxShipSpeed: 1800
+      maxShipSpeed: 1800,
+      bossIntervalMinutes: 7,
+      bossHealthPerPlayer: 40
     })
   })
 

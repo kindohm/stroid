@@ -12,6 +12,7 @@ type CreateLobbyAsteroidsArgs = {
   getAsteroidNames: () => AsteroidNamePools
   getSettings: () => RoomSettings
   isFrozen?: () => boolean
+  canSpawn?: () => boolean
   onChanged: (asteroids: Asteroid[]) => void
 }
 
@@ -19,6 +20,7 @@ export const createLobbyAsteroids = ({
   getAsteroidNames,
   getSettings,
   isFrozen = () => false,
+  canSpawn = () => true,
   onChanged
 }: CreateLobbyAsteroidsArgs) => {
   let asteroids: Asteroid[] = []
@@ -53,6 +55,10 @@ export const createLobbyAsteroids = ({
   }
 
   const fillAsteroidTarget = () => {
+    if (!canSpawn()) {
+      return
+    }
+
     const target = getAsteroidDensityTarget(getSettings(), asteroidsSpawned, asteroidsDestroyed)
 
     while (asteroids.length < target) {
@@ -123,7 +129,14 @@ export const createLobbyAsteroids = ({
     return asteroid
   }
 
+  const addAsteroids = (nextAsteroids: Asteroid[]) => {
+    asteroids = [...asteroids, ...nextAsteroids.map(nameAsteroid)]
+    asteroidsSpawned += nextAsteroids.length
+    onChanged(asteroids)
+  }
+
   return {
+    addAsteroids,
     destroy,
     getAsteroids: () => asteroids,
     reset,

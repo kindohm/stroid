@@ -32,6 +32,8 @@ export type RoomSettings = {
   playerLives: number
   friendlyFire: boolean
   maxShipSpeed: number
+  bossIntervalMinutes: number
+  bossHealthPerPlayer: number
 }
 
 export const defaultRoomSettings: RoomSettings = {
@@ -39,7 +41,9 @@ export const defaultRoomSettings: RoomSettings = {
   asteroidDensity: 0.5,
   playerLives: gameConfig.playerStartingLives,
   friendlyFire: false,
-  maxShipSpeed: gameConfig.maxSpeed
+  maxShipSpeed: gameConfig.maxSpeed,
+  bossIntervalMinutes: 1.5,
+  bossHealthPerPlayer: 50
 }
 
 export const roomSettingsBounds = {
@@ -57,6 +61,16 @@ export const roomSettingsBounds = {
     min: 800,
     max: 2400,
     step: 20
+  },
+  bossIntervalMinutes: {
+    min: 1,
+    max: 20,
+    step: 0.5
+  },
+  bossHealthPerPlayer: {
+    min: 5,
+    max: 100,
+    step: 5
   }
 } as const
 
@@ -114,6 +128,20 @@ export const sanitizeRoomSettings = (value: unknown): RoomSettings => {
       roomSettingsBounds.maxShipSpeed.min,
       roomSettingsBounds.maxShipSpeed.max,
       roomSettingsBounds.maxShipSpeed.step
+    ),
+    bossIntervalMinutes: sanitizeNumber(
+      source.bossIntervalMinutes,
+      defaultRoomSettings.bossIntervalMinutes,
+      roomSettingsBounds.bossIntervalMinutes.min,
+      roomSettingsBounds.bossIntervalMinutes.max,
+      roomSettingsBounds.bossIntervalMinutes.step
+    ),
+    bossHealthPerPlayer: sanitizeNumber(
+      source.bossHealthPerPlayer,
+      defaultRoomSettings.bossHealthPerPlayer,
+      roomSettingsBounds.bossHealthPerPlayer.min,
+      roomSettingsBounds.bossHealthPerPlayer.max,
+      roomSettingsBounds.bossHealthPerPlayer.step
     )
   }
 }
@@ -133,7 +161,17 @@ export const createRandomRoomSettings = (random: () => number = Math.random): Ro
         random() * (roomSettingsBounds.playerLives.max - roomSettingsBounds.playerLives.min + 1)
     ),
     friendlyFire: random() >= 0.5,
-    maxShipSpeed: roomSettingsBounds.maxShipSpeed.min + Math.floor(random() * (speedSteps + 1)) * speedStep
+    maxShipSpeed: roomSettingsBounds.maxShipSpeed.min + Math.floor(random() * (speedSteps + 1)) * speedStep,
+    bossIntervalMinutes: Math.floor(
+      roomSettingsBounds.bossIntervalMinutes.min +
+        random() * (roomSettingsBounds.bossIntervalMinutes.max - roomSettingsBounds.bossIntervalMinutes.min + 1)
+    ),
+    bossHealthPerPlayer: roomSettingsBounds.bossHealthPerPlayer.min +
+      Math.floor(
+        random() *
+          ((roomSettingsBounds.bossHealthPerPlayer.max - roomSettingsBounds.bossHealthPerPlayer.min) /
+            roomSettingsBounds.bossHealthPerPlayer.step + 1)
+      ) * roomSettingsBounds.bossHealthPerPlayer.step
   }
 }
 

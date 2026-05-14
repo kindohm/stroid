@@ -278,6 +278,65 @@ describe("renderGame", () => {
     expect(context.operations.filter((operation) => operation === "arc")).toHaveLength(2)
   })
 
+  it("draws boss geometry and health", () => {
+    const context = createContextStub()
+
+    renderGame({
+      context,
+      viewport,
+      world,
+      localPlayer: renderPlayer,
+      players: [renderPlayer],
+      projectiles: [],
+      asteroids: [],
+      boss: {
+        id: "boss-1",
+        name: "boss",
+        radius: gameConfig.bossRadius,
+        health: 12,
+        maxHealth: 25,
+        position: {
+          x: player.position.x + 180,
+          y: player.position.y
+        },
+        velocity: {
+          x: 0,
+          y: 20
+        },
+        shape: [1, 0.9, 1.1, 0.95]
+      },
+      explosions: [],
+      timeSeconds: 1
+    })
+
+    expect(context.operations).toContain("fillText:boss")
+    expect(context.operations).toContain("fillText:boss 12/25")
+  })
+
+  it("draws a decreasing boss countdown when boss is waiting", () => {
+    const context = createContextStub()
+
+    renderGame({
+      context,
+      viewport,
+      world,
+      localPlayer: renderPlayer,
+      players: [renderPlayer],
+      projectiles: [],
+      asteroids: [],
+      bossCountdown: {
+        preSpawnActive: false,
+        nextBossWindowAt: 130_000,
+        intervalMs: 180_000,
+        now: 100_000
+      },
+      explosions: [],
+      timeSeconds: 1
+    })
+
+    expect(context.operations).toContain("fillText:boss window 30s")
+  })
+
   it("draws powerups in the world and on the minimap", () => {
     const context = createContextStub()
 
