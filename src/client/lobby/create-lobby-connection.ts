@@ -20,6 +20,9 @@ type CreateLobbyConnectionArgs = {
   onProjectileFired: (message: Extract<ServerLobbyMessage, { type: "projectileFired" }>) => void
   onAsteroidState: (message: Extract<ServerLobbyMessage, { type: "asteroidState" }>) => void
   onAsteroidDestroyed: (message: Extract<ServerLobbyMessage, { type: "asteroidDestroyed" }>) => void
+  onPowerUpState: (message: Extract<ServerLobbyMessage, { type: "powerUpState" }>) => void
+  onPowerUpCollected: (message: Extract<ServerLobbyMessage, { type: "powerUpCollected" }>) => void
+  onPowerUpEffectState: (message: Extract<ServerLobbyMessage, { type: "powerUpEffectState" }>) => void
   onScoreState: (message: Extract<ServerLobbyMessage, { type: "scoreState" }>) => void
   onLifeState: (message: Extract<ServerLobbyMessage, { type: "lifeState" }>) => void
   onGameOver: (message: Extract<ServerLobbyMessage, { type: "gameOver" }>) => void
@@ -136,10 +139,39 @@ export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessa
       }
     }
 
+    if (message.type === "powerUpState" && Array.isArray(message.powerUps)) {
+      return {
+        type: "powerUpState",
+        powerUps: message.powerUps
+      } as ServerLobbyMessage
+    }
+
     if (message.type === "asteroidDestroyed" && typeof message.asteroid === "object" && message.asteroid) {
       return {
         type: "asteroidDestroyed",
         asteroid: message.asteroid
+      } as ServerLobbyMessage
+    }
+
+    if (
+      message.type === "powerUpCollected" &&
+      typeof message.playerId === "string" &&
+      typeof message.powerUp === "object" &&
+      message.powerUp &&
+      typeof message.effectExpiresAt === "number"
+    ) {
+      return {
+        type: "powerUpCollected",
+        playerId: message.playerId,
+        powerUp: message.powerUp,
+        effectExpiresAt: message.effectExpiresAt
+      } as ServerLobbyMessage
+    }
+
+    if (message.type === "powerUpEffectState" && Array.isArray(message.effects)) {
+      return {
+        type: "powerUpEffectState",
+        effects: message.effects
       } as ServerLobbyMessage
     }
 
@@ -194,6 +226,9 @@ export const createLobbyConnection = ({
   onProjectileFired,
   onAsteroidState,
   onAsteroidDestroyed,
+  onPowerUpState,
+  onPowerUpCollected,
+  onPowerUpEffectState,
   onScoreState,
   onLifeState,
   onGameOver,
@@ -279,6 +314,21 @@ export const createLobbyConnection = ({
       return
     }
 
+    if (message?.type === "powerUpState") {
+      onPowerUpState(message)
+      return
+    }
+
+    if (message?.type === "powerUpCollected") {
+      onPowerUpCollected(message)
+      return
+    }
+
+    if (message?.type === "powerUpEffectState") {
+      onPowerUpEffectState(message)
+      return
+    }
+
     if (message?.type === "scoreState") {
       onScoreState(message)
       return
@@ -346,6 +396,14 @@ export const createLobbyConnection = ({
       const message: ClientLobbyMessage = {
         type: "asteroidHit",
         asteroidId
+      }
+
+      socket.send(JSON.stringify(message))
+    },
+    sendPowerUpHit: (powerUpId: string) => {
+      const message: ClientLobbyMessage = {
+        type: "powerUpHit",
+        powerUpId
       }
 
       socket.send(JSON.stringify(message))

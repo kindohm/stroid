@@ -22,6 +22,8 @@ export type GameAudio = {
   playAsteroidDestroyed: () => void
   playFire: () => void
   playPlayerExplosion: () => void
+  playPowerUpCollected: () => void
+  playPowerUpSpawn: () => void
   setMuted: (isMuted: boolean) => void
   setThrusting: (isThrusting: boolean) => void
   setVolume: (volume: number) => void
@@ -195,6 +197,40 @@ export const createGameAudio = (): GameAudio => {
         gain: 0.1,
         durationSeconds: 0.34
       })
+    },
+    playPowerUpCollected: () => {
+      play({
+        type: "triangle",
+        fromFrequency: 360,
+        toFrequency: 920,
+        gain: 0.16,
+        durationSeconds: 0.16
+      })
+      play({
+        type: "sine",
+        fromFrequency: 780,
+        toFrequency: 1240,
+        gain: 0.1,
+        durationSeconds: 0.12
+      })
+    },
+    playPowerUpSpawn: () => {
+      play({
+        type: "sine",
+        fromFrequency: 520,
+        toFrequency: 520,
+        gain: 0.08,
+        durationSeconds: 0.08
+      })
+      window.setTimeout(() => {
+        play({
+          type: "sine",
+          fromFrequency: 690,
+          toFrequency: 690,
+          gain: 0.07,
+          durationSeconds: 0.08
+        })
+      }, 140)
     },
     setMuted: (isMuted: boolean) => {
       preferences = {

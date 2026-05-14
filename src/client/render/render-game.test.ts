@@ -277,4 +277,37 @@ describe("renderGame", () => {
     expect(context.operations).toContain("lineTo")
     expect(context.operations.filter((operation) => operation === "arc")).toHaveLength(2)
   })
+
+  it("draws powerups in the world and on the minimap", () => {
+    const context = createContextStub()
+
+    renderGame({
+      context,
+      viewport,
+      world,
+      localPlayer: renderPlayer,
+      players: [renderPlayer],
+      projectiles: [],
+      asteroids: [],
+      powerUps: [
+        {
+          id: "power-up-1",
+          type: "shield",
+          radius: gameConfig.powerUpRadius,
+          position: {
+            x: player.position.x + 80,
+            y: player.position.y
+          },
+          velocity: {
+            x: 120,
+            y: 0
+          }
+        }
+      ],
+      explosions: [],
+      timeSeconds: 1
+    })
+
+    expect(context.operations.filter((operation) => operation === "arc").length).toBeGreaterThan(2)
+  })
 })

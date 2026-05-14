@@ -115,4 +115,54 @@ describe("parseServerMessage", () => {
       })
     )
   })
+
+  it("parses powerup state messages", () => {
+    const message = parseServerMessage(JSON.stringify({
+      type: "powerUpState",
+      powerUps: [
+        {
+          id: "power-up-1",
+          type: "shield",
+          radius: 16,
+          position: { x: 10, y: 20 },
+          velocity: { x: 120, y: 0 }
+        }
+      ]
+    }))
+
+    expect(message).toEqual(
+      expect.objectContaining({
+        type: "powerUpState",
+        powerUps: [
+          expect.objectContaining({
+            id: "power-up-1",
+            type: "shield"
+          })
+        ]
+      })
+    )
+  })
+
+  it("parses powerup collection effect messages", () => {
+    const message = parseServerMessage(JSON.stringify({
+      type: "powerUpCollected",
+      playerId: "player-1",
+      effectExpiresAt: 123456,
+      powerUp: {
+        id: "power-up-1",
+        type: "scatterShot",
+        radius: 16,
+        position: { x: 10, y: 20 },
+        velocity: { x: 120, y: 0 }
+      }
+    }))
+
+    expect(message).toEqual(
+      expect.objectContaining({
+        type: "powerUpCollected",
+        playerId: "player-1",
+        effectExpiresAt: 123456
+      })
+    )
+  })
 })

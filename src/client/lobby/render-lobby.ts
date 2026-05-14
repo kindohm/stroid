@@ -24,6 +24,12 @@ const asteroidExplosionColorBySize = {
   small: "rgba(116, 255, 224, 0.86)"
 }
 
+const powerUpExplosionColorByType = {
+  shield: "rgba(116, 255, 224, 0.92)",
+  scatterShot: "rgba(255, 244, 166, 0.92)",
+  asteroidFreeze: "rgba(155, 183, 255, 0.92)"
+}
+
 const showToast = (app: HTMLElement, message: string, tone: "success" | "failure") => {
   document.querySelector(".toast")?.remove()
 
@@ -451,6 +457,37 @@ export const renderLobby = (state: AppState) => {
           ageSeconds: 0
         }
       ]
+    },
+    onPowerUpState: (message) => {
+      if (state.activeGame) {
+        const previousPowerUpIds = new Set(state.activeGame.powerUps.map((powerUp) => powerUp.id))
+        const hasNewPowerUp = message.powerUps.some((powerUp) => !previousPowerUpIds.has(powerUp.id))
+
+        state.activeGame.powerUps = message.powerUps
+
+        if (hasNewPowerUp) {
+          state.gameAudio?.playPowerUpSpawn()
+        }
+      }
+    },
+    onPowerUpCollected: (message) => {
+      if (state.activeGame) {
+        state.activeGame.powerUps = state.activeGame.powerUps.filter((powerUp) => powerUp.id !== message.powerUp.id)
+        state.incomingExplosions = [
+          ...state.incomingExplosions,
+          {
+            position: message.powerUp.position,
+            color: powerUpExplosionColorByType[message.powerUp.type],
+            ageSeconds: 0
+          }
+        ]
+        state.gameAudio?.playPowerUpCollected()
+      }
+    },
+    onPowerUpEffectState: (message) => {
+      if (state.activeGame) {
+        state.activeGame.powerUpEffects = message.effects
+      }
     },
     onScoreState: (message) => {
       if (state.activeGame) {

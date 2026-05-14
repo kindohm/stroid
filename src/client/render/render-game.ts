@@ -1,5 +1,5 @@
 import { gameConfig } from "../../shared/game-config"
-import type { Asteroid, GameWorld, PlayerShip, Projectile, Vector } from "../../shared/game-types"
+import type { Asteroid, GameWorld, PlayerShip, PowerUp, PowerUpType, Projectile, Vector } from "../../shared/game-types"
 
 export type RenderPlayerView = {
   username: string
@@ -25,6 +25,7 @@ type RenderGameArgs = {
   players: RenderPlayerView[]
   projectiles: Projectile[]
   asteroids: Asteroid[]
+  powerUps?: PowerUp[]
   explosions: RenderExplosion[]
   timeSeconds: number
 }
@@ -373,13 +374,93 @@ const drawAsteroids = (
   })
 }
 
+const powerUpColorByType: Record<PowerUpType, string> = {
+  shield: "#74ffe0",
+  scatterShot: "#fff4a6",
+  asteroidFreeze: "#9bb7ff"
+}
+
+const drawPowerUpShape = (
+  context: CanvasRenderingContext2D,
+  type: PowerUpType,
+  radius: number,
+  timeSeconds: number
+) => {
+  const pulse = Math.sin(timeSeconds * 8) * 2
+
+  if (type === "shield") {
+    context.beginPath()
+    context.arc(0, 0, radius + pulse, 0, Math.PI * 2)
+    context.stroke()
+    context.beginPath()
+    context.arc(0, 0, radius * 0.54, 0, Math.PI * 2)
+    context.stroke()
+    return
+  }
+
+  if (type === "scatterShot") {
+    const shotAngles = [-0.58, 0, 0.58]
+
+    shotAngles.forEach((angle) => {
+      context.beginPath()
+      context.moveTo(Math.cos(angle) * -radius * 0.35, Math.sin(angle) * -radius * 0.35)
+      context.lineTo(Math.cos(angle) * (radius + pulse), Math.sin(angle) * (radius + pulse))
+      context.stroke()
+    })
+    return
+  }
+
+  context.beginPath()
+  context.moveTo(0, -radius - pulse)
+  context.lineTo(radius * 0.72, -radius * 0.16)
+  context.lineTo(radius * 0.42, radius * 0.82)
+  context.lineTo(-radius * 0.42, radius * 0.82)
+  context.lineTo(-radius * 0.72, -radius * 0.16)
+  context.closePath()
+  context.stroke()
+}
+
+const drawPowerUps = (
+  context: CanvasRenderingContext2D,
+  camera: Vector,
+  viewport: Vector,
+  powerUps: PowerUp[],
+  timeSeconds: number
+) => {
+  powerUps.forEach((powerUp) => {
+    const screenPosition = worldToScreen(powerUp.position, camera, viewport)
+
+    if (!isOnScreen(screenPosition, viewport, powerUp.radius + 24)) {
+      return
+    }
+
+    const color = powerUpColorByType[powerUp.type]
+
+    context.save()
+    context.translate(screenPosition.x, screenPosition.y)
+    context.rotate(timeSeconds * 1.8)
+    context.strokeStyle = color
+    context.fillStyle = "rgba(5, 7, 10, 0.58)"
+    context.lineWidth = 2
+    context.shadowColor = color
+    context.shadowBlur = 18
+    context.beginPath()
+    context.arc(0, 0, powerUp.radius + 7, 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
+    drawPowerUpShape(context, powerUp.type, powerUp.radius, timeSeconds)
+    context.restore()
+  })
+}
+
 const drawMiniMap = (
   context: CanvasRenderingContext2D,
   viewport: Vector,
   world: GameWorld,
   players: RenderPlayerView[],
   projectiles: Projectile[],
-  asteroids: Asteroid[]
+  asteroids: Asteroid[],
+  powerUps: PowerUp[]
 ) => {
   const width = 164
   const height = 164
@@ -446,6 +527,17 @@ const drawMiniMap = (
     context.stroke()
   })
 
+  powerUps.forEach((powerUp) => {
+    const markerX = x + padding + (powerUp.position.x / world.width) * innerWidth
+    const markerY = y + padding + (powerUp.position.y / world.height) * innerHeight
+
+    context.fillStyle = powerUpColorByType[powerUp.type]
+    context.shadowBlur = 0
+    context.beginPath()
+    context.arc(markerX, markerY, 3, 0, Math.PI * 2)
+    context.fill()
+  })
+
   context.restore()
 }
 
@@ -469,6 +561,7 @@ export const renderGame = ({
   players,
   projectiles,
   asteroids,
+  powerUps = [],
   explosions,
   timeSeconds
 }: RenderGameArgs) => {
@@ -480,6 +573,7 @@ export const renderGame = ({
   drawGrid(context, localPlayer.ship.position, viewport, world)
   drawBoundary(context, localPlayer.ship.position, viewport, world)
   drawAsteroids(context, localPlayer.ship.position, viewport, asteroids)
+  drawPowerUps(context, localPlayer.ship.position, viewport, powerUps, timeSeconds)
   drawProjectiles(context, localPlayer.ship.position, viewport, projectiles)
   drawExplosions(context, localPlayer.ship.position, viewport, explosions)
 
@@ -526,6 +620,6 @@ export const renderGame = ({
     drawShipLabel(context, localScreenPosition, localPlayer.username, localPlayer.color)
   }
 
-  drawMiniMap(context, viewport, world, players, projectiles, asteroids)
+  drawMiniMap(context, viewport, world, players, projectiles, asteroids, powerUps)
   drawHud(context, localPlayer.ship, localPlayer.username)
 }

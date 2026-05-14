@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import type { WebSocket } from "ws"
 import { assignPlayerColor } from "../../game/assign-player-color"
 import { gameConfig } from "../../shared/game-config"
-import type { Asteroid, AsteroidSize } from "../../shared/game-types"
+import type { ActivePowerUpEffect, Asteroid, AsteroidSize, PowerUpType } from "../../shared/game-types"
 import type {
   AsteroidNamePools,
   AsteroidStatsState,
@@ -17,6 +17,7 @@ import type {
 import { asteroidNameSizeByAsteroidSize } from "./asteroid-name-size-by-asteroid-size"
 import { createLobbyAsteroids } from "./create-lobby-asteroids"
 import { createLobbyBroadcaster } from "./create-lobby-broadcaster"
+import { createLobbyPowerUps } from "./create-lobby-power-ups"
 import { defaultAsteroidNames } from "./default-asteroid-names"
 import type { LobbyClient } from "./lobby-client"
 import { parseClientMessage } from "./parse-client-message"
@@ -47,6 +48,7 @@ export const createLobby = ({
   let hostClientId = hostId
   const scoresByClientId = new Map<string, number>()
   const livesByClientId = new Map<string, number>()
+  const powerUpEffectsByClientId = new Map<string, Map<PowerUpType, number>>()
   const asteroidStatsByClientId = new Map<string, PlayerAsteroidStats>()
   let asteroidNames = defaultAsteroidNames
   let gameInProgress = false
@@ -94,6 +96,43 @@ export const createLobby = ({
       }
     })
   })
+
+  const getPowerUpEffects = (): ActivePowerUpEffect[] => {
+    const now = Date.now()
+
+    return [...powerUpEffectsByClientId.entries()].flatMap(([playerId, effectsByType]) =>
+      [...effectsByType.entries()]
+        .filter(([, expiresAt]) => expiresAt > now)
+        .map(([type, expiresAt]) => ({
+          playerId,
+          type,
+          expiresAt
+        }))
+    )
+  }
+
+  const expirePowerUpEffects = () => {
+    const now = Date.now()
+    let changed = false
+
+    powerUpEffectsByClientId.forEach((effectsByType, clientId) => {
+      effectsByType.forEach((expiresAt, type) => {
+        if (expiresAt <= now) {
+          effectsByType.delete(type)
+          changed = true
+        }
+      })
+
+      if (effectsByType.size === 0) {
+        powerUpEffectsByClientId.delete(clientId)
+      }
+    })
+
+    return changed
+  }
+
+  const hasActiveAsteroidFreeze = () =>
+    getPowerUpEffects().some((effect) => effect.type === "asteroidFreeze")
 
   const createEmptyAsteroidStats = (player: LobbyPlayer): PlayerAsteroidStats => ({
     ...player,
@@ -171,6 +210,13 @@ export const createLobby = ({
     })
   }
 
+  const broadcastPowerUpEffectState = () => {
+    broadcaster.sendToJoined({
+      type: "powerUpEffectState",
+      effects: getPowerUpEffects()
+    })
+  }
+
   const broadcastGameOver = () => {
     broadcaster.sendToJoined({
       type: "gameOver",
@@ -194,7 +240,21 @@ export const createLobby = ({
 
   const lobbyAsteroids = createLobbyAsteroids({
     getAsteroidNames: () => asteroidNames,
+    isFrozen: hasActiveAsteroidFreeze,
     onChanged: broadcastAsteroidState
+  })
+
+  const lobbyPowerUps = createLobbyPowerUps({
+    onChanged: (powerUps) => {
+      if (expirePowerUpEffects()) {
+        broadcastPowerUpEffectState()
+      }
+
+      broadcaster.sendToJoined({
+        type: "powerUpState",
+        powerUps
+      })
+    }
   })
 
   const sendGameStarted = (client: LobbyClient) => {
@@ -218,6 +278,7 @@ export const createLobby = ({
     scoresByClientId.clear()
     livesByClientId.clear()
     asteroidStatsByClientId.clear()
+    powerUpEffectsByClientId.clear()
     getPlayers().forEach((player) => {
       livesByClientId.set(player.id, gameConfig.playerStartingLives)
       asteroidStatsByClientId.set(player.id, createEmptyAsteroidStats(player))
@@ -225,10 +286,13 @@ export const createLobby = ({
     gameInProgress = true
     gameOver = false
     lobbyAsteroids.reset()
+    lobbyPowerUps.reset()
     lobbyAsteroids.start()
+    lobbyPowerUps.start()
     clients.forEach(sendGameStarted)
     broadcastScoreState()
     broadcastLifeState()
+    broadcastPowerUpEffectState()
     onChanged?.()
   }
 
@@ -269,6 +333,7 @@ export const createLobby = ({
       gameOver = true
       gameInProgress = false
       lobbyAsteroids.stop()
+      lobbyPowerUps.stop()
       broadcastGameOver()
       onChanged?.()
     }
@@ -305,6 +370,31 @@ export const createLobby = ({
     broadcastAsteroidState(lobbyAsteroids.getAsteroids())
   }
 
+  const handlePowerUpHit = (client: LobbyClient, powerUpIdToHit: string) => {
+    if (!client.username || !gameInProgress || gameOver) {
+      return
+    }
+
+    const powerUp = lobbyPowerUps.destroy(powerUpIdToHit)
+
+    if (!powerUp) {
+      return
+    }
+
+    const effectExpiresAt = Date.now() + gameConfig.powerUpEffectSeconds * 1000
+    const effectsByType = powerUpEffectsByClientId.get(client.id) ?? new Map<PowerUpType, number>()
+
+    effectsByType.set(powerUp.type, effectExpiresAt)
+    powerUpEffectsByClientId.set(client.id, effectsByType)
+    broadcaster.sendToJoined({
+      type: "powerUpCollected",
+      playerId: client.id,
+      powerUp,
+      effectExpiresAt
+    })
+    broadcastPowerUpEffectState()
+  }
+
   const broadcastPlayerState = (
     client: LobbyClient,
     ship: Extract<ClientLobbyMessage, { type: "playerState" }>["ship"]
@@ -333,12 +423,15 @@ export const createLobby = ({
 
   const removeClient = (client: LobbyClient) => {
     clients.delete(client.id)
+    powerUpEffectsByClientId.delete(client.id)
     broadcastLobbyState()
     broadcastScoreState()
     broadcastLifeState()
+    broadcastPowerUpEffectState()
 
     if (clients.size === 0) {
       lobbyAsteroids.stop()
+      lobbyPowerUps.stop()
       onEmpty?.(slug)
     }
   }
@@ -403,6 +496,11 @@ export const createLobby = ({
 
     if (message.type === "asteroidHit") {
       handleAsteroidHit(client, message.asteroidId)
+      return
+    }
+
+    if (message.type === "powerUpHit") {
+      handlePowerUpHit(client, message.powerUpId)
     }
   }
 
@@ -452,6 +550,9 @@ export const createLobby = ({
     hasClient: (clientId: string) => clients.has(clientId),
     isJoinable: () => !gameInProgress,
     removeClient,
-    stop: lobbyAsteroids.stop
+    stop: () => {
+      lobbyAsteroids.stop()
+      lobbyPowerUps.stop()
+    }
   }
 }

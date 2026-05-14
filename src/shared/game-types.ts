@@ -30,6 +30,22 @@ export type Projectile = {
   ttlSeconds: number
 }
 
+export type PowerUpType = "shield" | "scatterShot" | "asteroidFreeze"
+
+export type PowerUp = {
+  id: string
+  type: PowerUpType
+  position: Vector
+  velocity: Vector
+  radius: number
+}
+
+export type ActivePowerUpEffect = {
+  playerId: string
+  type: PowerUpType
+  expiresAt: number
+}
+
 export type AsteroidSize = "small" | "medium" | "large" | "extraLarge"
 
 export type Asteroid = {

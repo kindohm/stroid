@@ -1,4 +1,4 @@
-import type { Asteroid, AsteroidSize, Projectile, Vector } from "./game-types"
+import type { ActivePowerUpEffect, Asteroid, AsteroidSize, PowerUp, Projectile, Vector } from "./game-types"
 
 export type LobbyPlayer = {
   id: string
@@ -99,6 +99,10 @@ export type ClientLobbyMessage =
       asteroidId: string
     }
   | {
+      type: "powerUpHit"
+      powerUpId: string
+    }
+  | {
       type: "playerHit"
       ship: NetworkPlayerShip
     }
@@ -168,6 +172,10 @@ export type ServerLobbyMessage =
       asteroids: Asteroid[]
     }
   | {
+      type: "powerUpState"
+      powerUps: PowerUp[]
+    }
+  | {
       type: "asteroidDestroyed"
       asteroid: {
         id: string
@@ -175,6 +183,16 @@ export type ServerLobbyMessage =
         radius: number
         size: AsteroidSize
       }
+    }
+  | {
+      type: "powerUpCollected"
+      playerId: string
+      powerUp: PowerUp
+      effectExpiresAt: number
+    }
+  | {
+      type: "powerUpEffectState"
+      effects: ActivePowerUpEffect[]
     }
   | {
       type: "scoreState"

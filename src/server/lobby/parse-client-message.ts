@@ -36,6 +36,13 @@ export const parseClientMessage = (data: WebSocket.RawData): ClientLobbyMessage 
       }
     }
 
+    if (message.type === "powerUpHit" && typeof message.powerUpId === "string") {
+      return {
+        type: "powerUpHit",
+        powerUpId: message.powerUpId
+      }
+    }
+
     if (message.type === "playerHit" && typeof message.ship === "object" && message.ship) {
       return {
         type: "playerHit",

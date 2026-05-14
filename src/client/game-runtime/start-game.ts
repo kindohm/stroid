@@ -29,6 +29,8 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
     players,
     remoteTargets: new Map(),
     asteroids: [],
+    powerUps: [],
+    powerUpEffects: [],
     scores: createEmptyScoreState(players),
     lives: createInitialLifeState(players),
     isGameOver: false
@@ -112,6 +114,11 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
   let invincibleUntil = performance.now() + gameConfig.playerSpawnInvincibilitySeconds * 1000
   let followedPlayerId: string | undefined
   let explosions: RenderExplosion[] = []
+
+  const hasPowerUpEffect = (playerId: string, type: "shield" | "scatterShot" | "asteroidFreeze") =>
+    state.activeGame?.powerUpEffects.some(
+      (effect) => effect.playerId === playerId && effect.type === type && effect.expiresAt > Date.now()
+    ) ?? false
 
   const onResize = () => resizeCanvas(canvas, context)
   window.addEventListener("resize", onResize)
@@ -270,6 +277,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
     const gamePlayers = state.activeGame?.players ?? players
     const selfPlayer = gamePlayers.find((lobbyPlayer) => lobbyPlayer.id === selfId) ?? self
     const asteroids = state.activeGame?.asteroids ?? []
+    const powerUps = state.activeGame?.powerUps ?? []
     syncShips(gamePlayers)
 
     state.activeGame?.remoteTargets.forEach((ship, playerId) => {
@@ -293,20 +301,31 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
     if (canControlLocalShip && input.fire && now / 1000 - lastFireTime >= gameConfig.fireCooldownSeconds) {
       lastFireTime = now / 1000
       state.gameAudio?.playFire()
-      projectileId += 1
-      const projectile = createProjectile(
-        `${selfPlayer.username}-${projectileId}`,
-        selfPlayer.username,
-        selfPlayer.color,
-        updatedLocalShip
-      )
+      const projectileAngles = hasPowerUpEffect(selfId, "scatterShot")
+        ? [-0.18, 0, 0.18]
+        : [0]
+      const firedProjectiles = projectileAngles.map((angleOffset) => {
+        projectileId += 1
 
-      localProjectileIds.add(projectile.id)
+        return createProjectile(
+          `${selfPlayer.username}-${projectileId}`,
+          selfPlayer.username,
+          selfPlayer.color,
+          {
+            ...updatedLocalShip,
+            angle: updatedLocalShip.angle + angleOffset
+          }
+        )
+      })
+
+      firedProjectiles.forEach((projectile) => {
+        localProjectileIds.add(projectile.id)
+        state.lobbyConnection?.sendProjectileFired(projectile)
+      })
       projectiles = [
         ...projectiles,
-        projectile
+        ...firedProjectiles
       ]
-      state.lobbyConnection?.sendProjectileFired(projectile)
     }
 
     const localRenderShip = interpolateShip(
@@ -331,9 +350,24 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
         state.lobbyConnection?.sendAsteroidHit(asteroid.id)
       }
     })
+    powerUps.forEach((powerUp) => {
+      const projectile = projectiles.find(
+        (nextProjectile) =>
+          localProjectileIds.has(nextProjectile.id) &&
+          !hitProjectileIds.has(nextProjectile.id) &&
+          Math.hypot(nextProjectile.position.x - powerUp.position.x, nextProjectile.position.y - powerUp.position.y) <=
+            powerUp.radius + gameConfig.projectileRadius
+      )
+
+      if (projectile) {
+        hitProjectileIds.add(projectile.id)
+        localProjectileIds.delete(projectile.id)
+        state.lobbyConnection?.sendPowerUpHit(powerUp.id)
+      }
+    })
     projectiles = projectiles.filter((projectile) => !hitProjectileIds.has(projectile.id))
 
-    if (canControlLocalShip && now >= invincibleUntil) {
+    if (canControlLocalShip && now >= invincibleUntil && !hasPowerUpEffect(selfId, "shield")) {
       const hitAsteroid = asteroids.find(
         (asteroid) =>
           Math.hypot(
@@ -368,7 +402,9 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
             ? input.thrust
             : state.activeGame?.remoteTargets.get(lobbyPlayer.id)?.isThrusting ?? false,
         isLocal: lobbyPlayer.id === selfId,
-        isInvincible: lobbyPlayer.id === selfId && localShipStatus === "alive" && now < invincibleUntil
+        isInvincible: lobbyPlayer.id === selfId
+          ? localShipStatus === "alive" && (now < invincibleUntil || hasPowerUpEffect(lobbyPlayer.id, "shield"))
+          : hasPowerUpEffect(lobbyPlayer.id, "shield")
       }))
     const followedPlayer = gamePlayers.find((player) => player.id === followedPlayerId)
     const followedShip = followedPlayer ? shipsByPlayerId.get(followedPlayer.id) : undefined
@@ -388,7 +424,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
           color: selfPlayer.color,
           isThrusting: canControlLocalShip && input.thrust,
           isLocal: true,
-          isInvincible: localShipStatus === "alive" && now < invincibleUntil,
+          isInvincible: localShipStatus === "alive" && (now < invincibleUntil || hasPowerUpEffect(selfId, "shield")),
           isHidden: localShipStatus !== "alive"
         }
 
@@ -403,6 +439,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       players: renderPlayers,
       projectiles,
       asteroids,
+      powerUps,
       explosions,
       timeSeconds: now / 1000
     })

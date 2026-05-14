@@ -10,6 +10,7 @@ import { asteroidNameSizeByAsteroidSize } from "./asteroid-name-size-by-asteroid
 
 type CreateLobbyAsteroidsArgs = {
   getAsteroidNames: () => AsteroidNamePools
+  isFrozen?: () => boolean
   onChanged: (asteroids: Asteroid[]) => void
 }
 
@@ -20,6 +21,7 @@ const world: GameWorld = {
 
 export const createLobbyAsteroids = ({
   getAsteroidNames,
+  isFrozen = () => false,
   onChanged
 }: CreateLobbyAsteroidsArgs) => {
   let asteroids: Asteroid[] = []
@@ -73,7 +75,9 @@ export const createLobbyAsteroids = ({
       const deltaSeconds = Math.min(0.1, (now - lastAsteroidTick) / 1000)
 
       lastAsteroidTick = now
-      asteroids = updateAsteroids(asteroids, deltaSeconds, world)
+      if (!isFrozen()) {
+        asteroids = updateAsteroids(asteroids, deltaSeconds, world)
+      }
       fillAsteroidTarget()
       onChanged(asteroids)
     }, gameConfig.asteroidStateBroadcastIntervalMs)
