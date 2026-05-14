@@ -17,6 +17,7 @@ import { resizeCanvas } from "./resize-canvas"
 import { interpolateShip, smoothShip } from "./ship-interpolation"
 import { renderPlayerHeader } from "../ui/render-player-header"
 import { renderScorePanel } from "../ui/render-score-panel"
+import { updatePlayerStats } from "../stats/player-stats"
 
 export const startGame = (state: AppState, players: LobbyPlayer[], selfId: string, settings: RoomSettings) => {
   state.gameCleanup?.()
@@ -65,6 +66,9 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
   `
   renderPlayerHeader(state)
   renderScorePanel(state.activeGame.scores)
+  updatePlayerStats({
+    gamesPlayed: 1
+  })
   state.gameAudio?.destroy()
   state.gameAudio = createGameAudio()
   renderAudioControls(state.gameAudio)
@@ -184,6 +188,11 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       isThrusting
     }, cause)
     state.gameAudio?.playPlayerExplosion()
+    updatePlayerStats({
+      deathsByCause: {
+        [cause]: 1
+      }
+    })
 
     if (localLives <= 0) {
       localShipStatus = "eliminated"
@@ -247,6 +256,13 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
 
     let updatedLocalShip = shipsByPlayerId.get(selfId) ?? localShip
     const canControlLocalShip = localShipStatus === "alive" && !state.activeGame?.isGameOver
+
+    if (canControlLocalShip) {
+      updatePlayerStats({
+        thrustSeconds: input.thrust ? deltaSeconds : 0,
+        rotationSeconds: input.turnLeft || input.turnRight ? deltaSeconds : 0
+      })
+    }
 
     if (canControlLocalShip) {
       localSimulationAccumulator = Math.min(
@@ -328,6 +344,9 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
           }
         )
       })
+      updatePlayerStats({
+        shotsFired: firedProjectiles.length
+      })
 
       firedProjectiles.forEach((projectile) => {
         localProjectileIds.add(projectile.id)
@@ -358,6 +377,17 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       if (projectile) {
         hitProjectileIds.add(projectile.id)
         localProjectileIds.delete(projectile.id)
+        updatePlayerStats({
+          asteroidsHit: 1,
+          asteroidHitsBySize: {
+            [asteroid.size]: 1
+          },
+          asteroidHitsByName: asteroid.name
+            ? {
+                [asteroid.name]: 1
+              }
+            : undefined
+        })
         state.lobbyConnection?.sendAsteroidHit(asteroid.id)
       }
     })
@@ -373,6 +403,11 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       if (projectile) {
         hitProjectileIds.add(projectile.id)
         localProjectileIds.delete(projectile.id)
+        updatePlayerStats({
+          powerUpsCollected: {
+            [powerUp.type]: 1
+          }
+        })
         state.lobbyConnection?.sendPowerUpHit(powerUp.id)
       }
     })
@@ -388,6 +423,10 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       if (projectile) {
         hitProjectileIds.add(projectile.id)
         localProjectileIds.delete(projectile.id)
+        updatePlayerStats({
+          asteroidsHit: 1,
+          bossHits: 1
+        })
         state.lobbyConnection?.sendBossHit(boss.id)
       }
     }
