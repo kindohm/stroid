@@ -3,6 +3,7 @@ import type { LifeState, LobbyPlayer, NetworkPlayerShip, ScoreState } from "../.
 import type { createKeyboardInput } from "../input/create-keyboard-input"
 import type { createLobbyConnection } from "../lobby/create-lobby-connection"
 import type { RenderExplosion } from "../render/render-game"
+import type { GameAudio } from "../audio/create-game-audio"
 
 export type ActiveGame = {
   selfId: string
@@ -26,6 +27,7 @@ export type AppState = {
   incomingExplosions: RenderExplosion[]
   hiddenPlayerIds: Set<string>
   gameCleanup?: () => void
+  gameAudio?: GameAudio
   activeGame?: ActiveGame
 }
 

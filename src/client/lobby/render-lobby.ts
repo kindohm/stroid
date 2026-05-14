@@ -28,6 +28,8 @@ export const renderLobby = (state: AppState) => {
   cancelAnimationFrame(state.animationFrame)
   state.keyboard?.destroy()
   state.keyboard = undefined
+  state.gameAudio?.destroy()
+  state.gameAudio = undefined
   state.lobbyConnection?.destroy()
 
   const directSlug = getRouteLobbySlug()
@@ -378,6 +380,7 @@ export const renderLobby = (state: AppState) => {
       const player = state.activeGame?.players.find((nextPlayer) => nextPlayer.id === message.playerId)
 
       if (player) {
+        state.gameAudio?.playPlayerExplosion()
         state.hiddenPlayerIds.add(message.playerId)
         state.incomingExplosions = [
           ...state.incomingExplosions,
@@ -391,6 +394,7 @@ export const renderLobby = (state: AppState) => {
     },
     onProjectileFired: (message) => {
       if (state.activeGame && message.playerId !== state.activeGame.selfId) {
+        state.gameAudio?.playFire()
         state.incomingProjectiles = [
           ...state.incomingProjectiles.filter((projectile) => projectile.id !== message.projectile.id),
           message.projectile
@@ -403,6 +407,7 @@ export const renderLobby = (state: AppState) => {
       }
     },
     onAsteroidDestroyed: (message) => {
+      state.gameAudio?.playAsteroidDestroyed()
       state.incomingExplosions = [
         ...state.incomingExplosions,
         {

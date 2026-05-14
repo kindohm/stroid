@@ -8,6 +8,8 @@ import type { LobbyPlayer } from "../../shared/lobby-types"
 import type { AppState } from "../app/app-state"
 import { createKeyboardInput } from "../input/create-keyboard-input"
 import { renderGame, type RenderExplosion } from "../render/render-game"
+import { createGameAudio } from "../audio/create-game-audio"
+import { renderAudioControls } from "../audio/render-audio-controls"
 import { isRenderPlayerVisible } from "./is-render-player-visible"
 import { createEmptyScoreState, createInitialLifeState, getLife, isPlayerEliminated } from "./player-life"
 import { resizeCanvas } from "./resize-canvas"
@@ -56,6 +58,9 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
   `
   renderPlayerHeader(state)
   renderScorePanel(state.activeGame.scores)
+  state.gameAudio?.destroy()
+  state.gameAudio = createGameAudio()
+  renderAudioControls(state.gameAudio)
 
   const canvas = state.app.querySelector<HTMLCanvasElement>("canvas")
   const context = canvas?.getContext("2d", {
@@ -113,6 +118,10 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
   state.gameCleanup = () => {
     window.removeEventListener("resize", onResize)
     cancelAnimationFrame(state.animationFrame)
+    document.querySelector(".audio-panel")?.remove()
+    state.gameAudio?.setThrusting(false)
+    state.gameAudio?.destroy()
+    state.gameAudio = undefined
     state.keyboard?.destroy()
     state.keyboard = undefined
     state.gameCleanup = undefined
@@ -157,6 +166,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       angle: ship.angle,
       isThrusting
     })
+    state.gameAudio?.playPlayerExplosion()
 
     if (localLives <= 0) {
       localShipStatus = "eliminated"
@@ -282,6 +292,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
 
     if (canControlLocalShip && input.fire && now / 1000 - lastFireTime >= gameConfig.fireCooldownSeconds) {
       lastFireTime = now / 1000
+      state.gameAudio?.playFire()
       projectileId += 1
       const projectile = createProjectile(
         `${selfPlayer.username}-${projectileId}`,
@@ -335,6 +346,8 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
         destroyLocalShip(updatedLocalShip, now, input.thrust)
       }
     }
+
+    state.gameAudio?.setThrusting(canControlLocalShip && input.thrust)
 
     if (localShipStatus === "eliminated") {
       followedPlayerId = chooseFollowedPlayerId(gamePlayers)
