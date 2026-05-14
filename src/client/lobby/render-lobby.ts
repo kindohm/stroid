@@ -10,6 +10,7 @@ import { renderPlayerHeader } from "../ui/render-player-header"
 import { renderScorePanel } from "../ui/render-score-panel"
 import { defaultAsteroidNames } from "./asteroid-name-options"
 import { saveStoredAsteroidNames } from "./asteroid-name-storage"
+import { copyLobbyInvite } from "./copy-lobby-invite"
 import { createLobbyConnection } from "./create-lobby-connection"
 import { parseAsteroidNameInputs } from "./parse-asteroid-name-inputs"
 import { renderAsteroidEditor } from "./render-asteroid-editor"
@@ -21,6 +22,18 @@ const asteroidExplosionColorBySize = {
   large: "rgba(218, 209, 184, 0.9)",
   medium: "rgba(188, 210, 196, 0.9)",
   small: "rgba(116, 255, 224, 0.86)"
+}
+
+const showToast = (app: HTMLElement, message: string, tone: "success" | "failure") => {
+  document.querySelector(".toast")?.remove()
+
+  const toast = document.createElement("div")
+
+  toast.className = `toast toast-${tone}`
+  toast.setAttribute("role", "status")
+  toast.textContent = message
+  app.append(toast)
+  window.setTimeout(() => toast.remove(), 2200)
 }
 
 export const renderLobby = (state: AppState) => {
@@ -174,7 +187,10 @@ export const renderLobby = (state: AppState) => {
           <span>lobby</span>
           <strong>${escapeHtml(state.currentLobbySlug)}</strong>
         </div>
-        <input class="share-url" readonly value="${escapeHtml(shareUrl)}" aria-label="Share URL" />
+        <div class="share-row">
+          <input class="share-url" readonly value="${escapeHtml(shareUrl)}" aria-label="Share URL" />
+          <button class="copy-invite-button secondary-button" type="button">Copy</button>
+        </div>
       </section>
       <section class="lobby-roster" aria-label="Lobby players">
         <div class="lobby-roster-header">
@@ -194,9 +210,10 @@ export const renderLobby = (state: AppState) => {
     const startButton = state.app.querySelector<HTMLButtonElement>(".start-button")
     const leaveButton = state.app.querySelector<HTMLButtonElement>(".leave-lobby-button")
     const shareInput = state.app.querySelector<HTMLInputElement>(".share-url")
+    const copyInviteButton = state.app.querySelector<HTMLButtonElement>(".copy-invite-button")
     const asteroidNameEditor = state.app.querySelector<HTMLElement>(".asteroid-name-editor")
 
-    if (!playerList || !startButton || !leaveButton || !shareInput || !asteroidNameEditor) {
+    if (!playerList || !startButton || !leaveButton || !shareInput || !copyInviteButton || !asteroidNameEditor) {
       throw new Error("Room failed to render")
     }
 
@@ -217,6 +234,24 @@ export const renderLobby = (state: AppState) => {
     )
     shareInput.addEventListener("focus", () => {
       shareInput.select()
+    })
+    copyInviteButton.addEventListener("click", async () => {
+      copyInviteButton.disabled = true
+      const result = await copyLobbyInvite(shareUrl)
+
+      if (result === "copied") {
+        showToast(state.app, "invite copied", "success")
+      } else {
+        shareInput.focus()
+        shareInput.select()
+        showToast(
+          state.app,
+          result === "unsupported" ? "copy unavailable - link selected" : "copy failed - link selected",
+          "failure"
+        )
+      }
+
+      copyInviteButton.disabled = false
     })
     startButton.addEventListener("click", () => {
       if (isHost) {
