@@ -1,5 +1,6 @@
 import type { ActivePowerUpEffect, Asteroid, PowerUp, Projectile } from "../../shared/game-types"
 import type { LifeState, LobbyPlayer, NetworkPlayerShip, ScoreState } from "../../shared/lobby-types"
+import type { RoomSettings } from "../../shared/room-settings"
 import type { createKeyboardInput } from "../input/create-keyboard-input"
 import type { createLobbyConnection } from "../lobby/create-lobby-connection"
 import type { RenderExplosion } from "../render/render-game"
@@ -12,6 +13,7 @@ export type ActiveGame = {
   asteroids: Asteroid[]
   powerUps: PowerUp[]
   powerUpEffects: ActivePowerUpEffect[]
+  settings: RoomSettings
   scores: ScoreState
   lives: LifeState
   isGameOver: boolean

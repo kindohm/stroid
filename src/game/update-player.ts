@@ -30,7 +30,8 @@ export const updatePlayer = (
   player: PlayerShip,
   input: PlayerInput,
   deltaSeconds: number,
-  world: GameWorld
+  world: GameWorld,
+  maxSpeed: number = gameConfig.maxSpeed
 ): PlayerShip => {
   const turn = Number(input.turnRight) - Number(input.turnLeft)
   const angle = player.angle + turn * gameConfig.turnSpeed * deltaSeconds
@@ -45,7 +46,7 @@ export const updatePlayer = (
       x: acceleratedVelocity.x * drag,
       y: acceleratedVelocity.y * drag
     },
-    gameConfig.maxSpeed
+    maxSpeed
   )
   const nextPosition = {
     x: player.position.x + velocity.x * deltaSeconds,

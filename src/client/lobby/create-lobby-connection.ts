@@ -5,6 +5,8 @@ import type {
   NetworkPlayerShip,
   ServerLobbyMessage
 } from "../../shared/lobby-types"
+import { sanitizeRoomSettings } from "../../shared/room-settings"
+import type { RoomSettings } from "../../shared/room-settings"
 
 type CreateLobbyConnectionArgs = {
   onUsernameAccepted: (message: Extract<ServerLobbyMessage, { type: "usernameAccepted" }>) => void
@@ -91,7 +93,9 @@ export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessa
       typeof message.hostId === "string" &&
       typeof message.selfId === "string" &&
       typeof message.asteroidNames === "object" &&
-      message.asteroidNames
+      message.asteroidNames &&
+      typeof message.settings === "object" &&
+      message.settings
     ) {
       return {
         type: message.type,
@@ -99,7 +103,8 @@ export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessa
         hostId: message.hostId,
         selfId: message.selfId,
         players: message.players,
-        asteroidNames: message.asteroidNames
+        asteroidNames: message.asteroidNames,
+        settings: sanitizeRoomSettings(message.settings)
       } as ServerLobbyMessage
     }
 
@@ -436,6 +441,14 @@ export const createLobbyConnection = ({
       const message: ClientLobbyMessage = {
         type: "setAsteroidNames",
         asteroidNames
+      }
+
+      socket.send(JSON.stringify(message))
+    },
+    setRoomSettings: (settings: RoomSettings) => {
+      const message: ClientLobbyMessage = {
+        type: "setRoomSettings",
+        settings
       }
 
       socket.send(JSON.stringify(message))

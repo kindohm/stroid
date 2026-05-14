@@ -1,18 +1,15 @@
 import { createPowerUp } from "../../game/create-power-up"
 import { updatePowerUps } from "../../game/update-power-ups"
 import { gameConfig } from "../../shared/game-config"
-import type { GameWorld, PowerUp } from "../../shared/game-types"
+import type { PowerUp } from "../../shared/game-types"
+import { createGameWorld, type RoomSettings } from "../../shared/room-settings"
 
 type CreateLobbyPowerUpsArgs = {
+  getSettings: () => RoomSettings
   onChanged: (powerUps: PowerUp[]) => void
 }
 
-const world: GameWorld = {
-  width: gameConfig.mapTilesWide * gameConfig.tileSize,
-  height: gameConfig.mapTilesTall * gameConfig.tileSize
-}
-
-export const createLobbyPowerUps = ({ onChanged }: CreateLobbyPowerUpsArgs) => {
+export const createLobbyPowerUps = ({ getSettings, onChanged }: CreateLobbyPowerUpsArgs) => {
   let powerUps: PowerUp[] = []
   let powerUpId = 0
   let powerUpInterval: ReturnType<typeof setInterval> | undefined
@@ -29,7 +26,7 @@ export const createLobbyPowerUps = ({ onChanged }: CreateLobbyPowerUpsArgs) => {
       return
     }
 
-    powerUps = [...powerUps, createPowerUp(createPowerUpId(), world, Math.random)]
+    powerUps = [...powerUps, createPowerUp(createPowerUpId(), createGameWorld(getSettings()), Math.random)]
     nextSpawnAt = Date.now() + gameConfig.powerUpSpawnIntervalMs
   }
 
@@ -47,7 +44,7 @@ export const createLobbyPowerUps = ({ onChanged }: CreateLobbyPowerUpsArgs) => {
       const deltaSeconds = Math.min(0.1, (now - lastPowerUpTick) / 1000)
 
       lastPowerUpTick = now
-      powerUps = updatePowerUps(powerUps, deltaSeconds, world)
+      powerUps = updatePowerUps(powerUps, deltaSeconds, createGameWorld(getSettings()))
 
       if (now >= nextSpawnAt) {
         spawnPowerUp()

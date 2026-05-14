@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { defaultRoomSettings } from "../../shared/room-settings"
 import { parseServerMessage } from "./create-lobby-connection"
 
 describe("parseServerMessage", () => {
@@ -25,7 +26,8 @@ describe("parseServerMessage", () => {
         large: ["Beta"],
         medium: ["Gamma"],
         small: ["Omega"]
-      }
+      },
+      settings: defaultRoomSettings
     }))
 
     expect(message).toEqual(
@@ -56,7 +58,8 @@ describe("parseServerMessage", () => {
         large: ["Beta"],
         medium: ["Gamma"],
         small: ["Omega"]
-      }
+      },
+      settings: defaultRoomSettings
     }))
 
     expect(message).toEqual(

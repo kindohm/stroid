@@ -1,6 +1,7 @@
 import type { WebSocket } from "ws"
 import type { Projectile } from "../../shared/game-types"
 import type { ClientLobbyMessage } from "../../shared/lobby-types"
+import { sanitizeRoomSettings } from "../../shared/room-settings"
 import { defaultAsteroidNames } from "./default-asteroid-names"
 import { sanitizeAsteroidNames } from "./sanitize-asteroid-names"
 import { sanitizeUsername } from "./sanitize-username"
@@ -19,6 +20,13 @@ export const parseClientMessage = (data: WebSocket.RawData): ClientLobbyMessage 
       return {
         type: "setAsteroidNames",
         asteroidNames: sanitizeAsteroidNames(message.asteroidNames, defaultAsteroidNames)
+      }
+    }
+
+    if (message.type === "setRoomSettings") {
+      return {
+        type: "setRoomSettings",
+        settings: sanitizeRoomSettings(message.settings)
       }
     }
 

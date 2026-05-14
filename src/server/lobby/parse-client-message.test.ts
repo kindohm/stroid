@@ -11,4 +11,26 @@ describe("parseClientMessage", () => {
       powerUpId: "power-up-1"
     })
   })
+
+  it("sanitizes room settings messages", () => {
+    expect(parseClientMessage(Buffer.from(JSON.stringify({
+      type: "setRoomSettings",
+      settings: {
+        mapSize: "tiny",
+        asteroidDensity: 2,
+        playerLives: 4,
+        friendlyFire: true,
+        maxShipSpeed: 1200
+      }
+    })))).toEqual({
+      type: "setRoomSettings",
+      settings: {
+        mapSize: "tiny",
+        asteroidDensity: 1,
+        playerLives: 4,
+        friendlyFire: true,
+        maxShipSpeed: 1200
+      }
+    })
+  })
 })

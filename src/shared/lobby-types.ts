@@ -1,4 +1,5 @@
 import type { ActivePowerUpEffect, Asteroid, AsteroidSize, PowerUp, Projectile, Vector } from "./game-types"
+import type { RoomSettings } from "./room-settings"
 
 export type LobbyPlayer = {
   id: string
@@ -88,6 +89,10 @@ export type ClientLobbyMessage =
       asteroidNames: AsteroidNamePools
     }
   | {
+      type: "setRoomSettings"
+      settings: RoomSettings
+    }
+  | {
       type: "startGame"
     }
   | {
@@ -143,6 +148,7 @@ export type ServerLobbyMessage =
       selfId: string
       players: LobbyPlayer[]
       asteroidNames: AsteroidNamePools
+      settings: RoomSettings
     }
   | {
       type: "gameStarted"
@@ -151,6 +157,7 @@ export type ServerLobbyMessage =
       selfId: string
       players: LobbyPlayer[]
       asteroidNames: AsteroidNamePools
+      settings: RoomSettings
     }
   | {
       type: "playerState"

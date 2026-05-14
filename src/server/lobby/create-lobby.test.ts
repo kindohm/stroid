@@ -400,4 +400,86 @@ describe("createLobby", () => {
 
     expect(latest?.players?.map((player) => player.username)).toEqual(["mika"])
   })
+
+  it("only lets the host update room settings before the game starts", () => {
+    const lobby = createLobby()
+    const host = createSocket()
+    const guest = createSocket()
+
+    lobby.addClient(host as never)
+    lobby.addClient(guest as never)
+
+    host.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    guest.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
+    guest.listeners.get("message")?.(JSON.stringify({
+      type: "setRoomSettings",
+      settings: {
+        mapSize: "huge",
+        asteroidDensity: 1,
+        playerLives: 9,
+        friendlyFire: true,
+        maxShipSpeed: 2400
+      }
+    }))
+    host.listeners.get("message")?.(JSON.stringify({
+      type: "setRoomSettings",
+      settings: {
+        mapSize: "tiny",
+        asteroidDensity: 0,
+        playerLives: 1,
+        friendlyFire: true,
+        maxShipSpeed: 800
+      }
+    }))
+
+    const latest = guest.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        settings?: {
+          mapSize: string
+          asteroidDensity: number
+          playerLives: number
+          friendlyFire: boolean
+          maxShipSpeed: number
+        }
+      })
+      .filter((message) => message.type === "lobbyState")
+      .at(-1)
+
+    expect(latest?.settings).toEqual({
+      mapSize: "tiny",
+      asteroidDensity: 0,
+      playerLives: 1,
+      friendlyFire: true,
+      maxShipSpeed: 800
+    })
+  })
+
+  it("uses room settings for starting lives", () => {
+    const lobby = createLobby()
+    const socket = createSocket()
+
+    lobby.addClient(socket as never)
+
+    socket.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    socket.listeners.get("message")?.(JSON.stringify({
+      type: "setRoomSettings",
+      settings: {
+        mapSize: "standard",
+        asteroidDensity: 0.5,
+        playerLives: 1,
+        friendlyFire: false,
+        maxShipSpeed: 1640
+      }
+    }))
+    socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    socket.listeners.get("message")?.(playerHitMessage)
+
+    const gameOver = socket.sent
+      .map((message) => JSON.parse(message) as { type: string })
+      .find((message) => message.type === "gameOver")
+
+    expect(gameOver?.type).toBe("gameOver")
+    lobby.stop()
+  })
 })

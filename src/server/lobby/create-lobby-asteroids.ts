@@ -1,26 +1,23 @@
 import { createBorderAsteroid } from "../../game/create-border-asteroid"
-import { getAsteroidSpawnTarget } from "../../game/get-asteroid-spawn-target"
 import { getAsteroidSpeedMultiplier } from "../../game/get-asteroid-speed-multiplier"
 import { splitAsteroid } from "../../game/split-asteroid"
 import { updateAsteroids } from "../../game/update-asteroids"
 import { gameConfig } from "../../shared/game-config"
-import type { Asteroid, GameWorld } from "../../shared/game-types"
+import type { Asteroid } from "../../shared/game-types"
 import type { AsteroidNamePools } from "../../shared/lobby-types"
+import { createGameWorld, getAsteroidDensityTarget, type RoomSettings } from "../../shared/room-settings"
 import { asteroidNameSizeByAsteroidSize } from "./asteroid-name-size-by-asteroid-size"
 
 type CreateLobbyAsteroidsArgs = {
   getAsteroidNames: () => AsteroidNamePools
+  getSettings: () => RoomSettings
   isFrozen?: () => boolean
   onChanged: (asteroids: Asteroid[]) => void
 }
 
-const world: GameWorld = {
-  width: gameConfig.mapTilesWide * gameConfig.tileSize,
-  height: gameConfig.mapTilesTall * gameConfig.tileSize
-}
-
 export const createLobbyAsteroids = ({
   getAsteroidNames,
+  getSettings,
   isFrozen = () => false,
   onChanged
 }: CreateLobbyAsteroidsArgs) => {
@@ -49,12 +46,14 @@ export const createLobbyAsteroids = ({
 
   const createAsteroid = () => {
     const speedMultiplier = getAsteroidSpeedMultiplier(asteroidsSpawned, asteroidsDestroyed)
+    const world = createGameWorld(getSettings())
+
     asteroidsSpawned += 1
     return nameAsteroid(createBorderAsteroid(createAsteroidId(), world, Math.random, speedMultiplier))
   }
 
   const fillAsteroidTarget = () => {
-    const target = getAsteroidSpawnTarget(asteroidsSpawned, asteroidsDestroyed)
+    const target = getAsteroidDensityTarget(getSettings(), asteroidsSpawned, asteroidsDestroyed)
 
     while (asteroids.length < target) {
       asteroids = [...asteroids, createAsteroid()]
@@ -76,6 +75,8 @@ export const createLobbyAsteroids = ({
 
       lastAsteroidTick = now
       if (!isFrozen()) {
+        const world = createGameWorld(getSettings())
+
         asteroids = updateAsteroids(asteroids, deltaSeconds, world)
       }
       fillAsteroidTarget()

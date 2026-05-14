@@ -1,9 +1,16 @@
 import { gameConfig } from "../shared/game-config"
-import type { PlayerShip } from "../shared/game-types"
+import type { GameWorld, PlayerShip } from "../shared/game-types"
 
-export const createStartingPlayerShip = (index: number, totalPlayers: number): PlayerShip => {
-  const width = gameConfig.mapTilesWide * gameConfig.tileSize
-  const height = gameConfig.mapTilesTall * gameConfig.tileSize
+export const createStartingPlayerShip = (
+  index: number,
+  totalPlayers: number,
+  world: GameWorld = {
+    width: gameConfig.mapTilesWide * gameConfig.tileSize,
+    height: gameConfig.mapTilesTall * gameConfig.tileSize
+  }
+): PlayerShip => {
+  const width = world.width
+  const height = world.height
   const spread = Math.max(80, Math.min(180, totalPlayers * 26))
   const angle = (index / Math.max(1, totalPlayers)) * Math.PI * 2
 

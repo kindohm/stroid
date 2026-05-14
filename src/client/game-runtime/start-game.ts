@@ -5,6 +5,7 @@ import { updatePlayer } from "../../game/update-player"
 import { gameConfig } from "../../shared/game-config"
 import type { PlayerShip, Projectile } from "../../shared/game-types"
 import type { LobbyPlayer } from "../../shared/lobby-types"
+import { createGameWorld, type RoomSettings } from "../../shared/room-settings"
 import type { AppState } from "../app/app-state"
 import { createKeyboardInput } from "../input/create-keyboard-input"
 import { renderGame, type RenderExplosion } from "../render/render-game"
@@ -14,11 +15,10 @@ import { isRenderPlayerVisible } from "./is-render-player-visible"
 import { createEmptyScoreState, createInitialLifeState, getLife, isPlayerEliminated } from "./player-life"
 import { resizeCanvas } from "./resize-canvas"
 import { interpolateShip, smoothShip } from "./ship-interpolation"
-import { world } from "./world"
 import { renderPlayerHeader } from "../ui/render-player-header"
 import { renderScorePanel } from "../ui/render-score-panel"
 
-export const startGame = (state: AppState, players: LobbyPlayer[], selfId: string) => {
+export const startGame = (state: AppState, players: LobbyPlayer[], selfId: string, settings: RoomSettings) => {
   state.gameCleanup?.()
   cancelAnimationFrame(state.animationFrame)
   state.keyboard?.destroy()
@@ -31,10 +31,12 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
     asteroids: [],
     powerUps: [],
     powerUpEffects: [],
+    settings,
     scores: createEmptyScoreState(players),
-    lives: createInitialLifeState(players),
+    lives: createInitialLifeState(players, settings.playerLives),
     isGameOver: false
   }
+  const world = createGameWorld(settings)
   state.currentUsername = players.find((player) => player.id === selfId)?.username ?? state.currentUsername
 
   state.app.innerHTML = `
@@ -84,7 +86,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
   const syncShips = (nextPlayers: LobbyPlayer[]) => {
     nextPlayers.forEach((lobbyPlayer, index) => {
       if (!shipsByPlayerId.has(lobbyPlayer.id)) {
-        shipsByPlayerId.set(lobbyPlayer.id, createStartingPlayerShip(index, nextPlayers.length))
+        shipsByPlayerId.set(lobbyPlayer.id, createStartingPlayerShip(index, nextPlayers.length, world))
       }
     })
   }
@@ -109,7 +111,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
 
   let previousLocalShip: PlayerShip = initialLocalShip
   let localShipStatus: "alive" | "destroyed" | "eliminated" = "alive"
-  let localLives: number = gameConfig.playerStartingLives
+  let localLives: number = settings.playerLives
   let respawnAt = 0
   let invincibleUntil = performance.now() + gameConfig.playerSpawnInvincibilitySeconds * 1000
   let followedPlayerId: string | undefined
@@ -139,7 +141,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
     const gamePlayers = state.activeGame?.players ?? players
     const selfIndex = Math.max(0, gamePlayers.findIndex((player) => player.id === selfId))
 
-    return createStartingPlayerShip(selfIndex, gamePlayers.length)
+    return createStartingPlayerShip(selfIndex, gamePlayers.length, world)
   }
 
   const chooseFollowedPlayerId = (gamePlayers: LobbyPlayer[]) => {
@@ -246,7 +248,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
 
       while (localSimulationAccumulator >= localSimulationStepSeconds) {
         previousLocalShip = updatedLocalShip
-        updatedLocalShip = updatePlayer(updatedLocalShip, input, localSimulationStepSeconds, world)
+        updatedLocalShip = updatePlayer(updatedLocalShip, input, localSimulationStepSeconds, world, settings.maxShipSpeed)
         localSimulationAccumulator -= localSimulationStepSeconds
       }
     }
@@ -365,6 +367,24 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
         state.lobbyConnection?.sendPowerUpHit(powerUp.id)
       }
     })
+
+    const canLocalTakeFriendlyHit =
+      settings.friendlyFire && canControlLocalShip && now >= invincibleUntil && !hasPowerUpEffect(selfId, "shield")
+    const friendlyProjectile = canLocalTakeFriendlyHit
+      ? projectiles.find(
+          (projectile) =>
+            !localProjectileIds.has(projectile.id) &&
+            projectile.owner !== selfPlayer.username &&
+            Math.hypot(projectile.position.x - updatedLocalShip.position.x, projectile.position.y - updatedLocalShip.position.y) <=
+              gameConfig.shipRadius + gameConfig.projectileRadius
+        )
+      : undefined
+
+    if (friendlyProjectile) {
+      hitProjectileIds.add(friendlyProjectile.id)
+      destroyLocalShip(updatedLocalShip, now, input.thrust)
+    }
+
     projectiles = projectiles.filter((projectile) => !hitProjectileIds.has(projectile.id))
 
     if (canControlLocalShip && now >= invincibleUntil && !hasPowerUpEffect(selfId, "shield")) {
@@ -377,6 +397,24 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       )
 
       if (hitAsteroid) {
+        destroyLocalShip(updatedLocalShip, now, input.thrust)
+      }
+    }
+
+    if (canLocalTakeFriendlyHit) {
+      const hitPlayer = gamePlayers
+        .filter((player) => player.id !== selfId && !isPlayerEliminated(state.activeGame?.lives, player.id))
+        .find((player) => {
+          const ship = shipsByPlayerId.get(player.id)
+
+          return Boolean(
+            ship &&
+              Math.hypot(ship.position.x - updatedLocalShip.position.x, ship.position.y - updatedLocalShip.position.y) <=
+                gameConfig.shipRadius * 2
+          )
+        })
+
+      if (hitPlayer) {
         destroyLocalShip(updatedLocalShip, now, input.thrust)
       }
     }

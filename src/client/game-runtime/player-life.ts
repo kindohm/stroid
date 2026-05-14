@@ -15,10 +15,13 @@ export const createEmptyScoreState = (players: LobbyPlayer[]): ScoreState => {
   }
 }
 
-export const createInitialLifeState = (players: LobbyPlayer[]): LifeState => ({
+export const createInitialLifeState = (
+  players: LobbyPlayer[],
+  playerStartingLives: number = gameConfig.playerStartingLives
+): LifeState => ({
   players: players.map((player) => ({
     ...player,
-    lives: gameConfig.playerStartingLives,
+    lives: playerStartingLives,
     isEliminated: false
   }))
 })

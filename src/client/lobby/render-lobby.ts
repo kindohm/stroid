@@ -1,5 +1,12 @@
-import { gameConfig } from "../../shared/game-config"
 import type { AsteroidNamePools, LobbyPlayer, LobbySummary } from "../../shared/lobby-types"
+import {
+  createRandomRoomSettings,
+  defaultRoomSettings,
+  mapSizePresets,
+  roomSettingsBounds,
+  sanitizeRoomSettings,
+  type RoomSettings
+} from "../../shared/room-settings"
 import type { AppState } from "../app/app-state"
 import { escapeHtml } from "../app/escape-html"
 import { getRouteLobbySlug, setRoute } from "../app/route"
@@ -53,6 +60,7 @@ export const renderLobby = (state: AppState) => {
 
   const directSlug = getRouteLobbySlug()
   let asteroidNames: AsteroidNamePools = defaultAsteroidNames
+  let roomSettings: RoomSettings = defaultRoomSettings
   let connectionStatus: "connected" | "connecting" | "disconnected" = "connecting"
   let selfId = ""
   let lobbyPlayers: LobbyPlayer[] = []
@@ -209,6 +217,38 @@ export const renderLobby = (state: AppState) => {
           <button class="leave-lobby-button secondary-button" type="button">Leave</button>
         </div>
       </section>
+      <section class="room-settings" aria-label="Game variant settings">
+        <div class="lobby-roster-header">
+          <span>game variants</span>
+          <button class="randomize-settings-button secondary-button" type="button" ${!isHost || state.activeGame ? "disabled" : ""}>Randomize</button>
+        </div>
+        <div class="room-settings-grid">
+          <label>
+            <span>map size</span>
+            <select name="mapSize" ${!isHost || state.activeGame ? "disabled" : ""}>
+              ${mapSizePresets.map((preset) => `
+                <option value="${preset.id}" ${roomSettings.mapSize === preset.id ? "selected" : ""}>${preset.label}</option>
+              `).join("")}
+            </select>
+          </label>
+          <label>
+            <span>asteroid density ${Math.round(roomSettings.asteroidDensity * 100)}%</span>
+            <input name="asteroidDensity" type="range" min="${roomSettingsBounds.asteroidDensity.min}" max="${roomSettingsBounds.asteroidDensity.max}" step="${roomSettingsBounds.asteroidDensity.step}" value="${roomSettings.asteroidDensity}" ${!isHost || state.activeGame ? "disabled" : ""} />
+          </label>
+          <label>
+            <span>player lives</span>
+            <input name="playerLives" type="number" min="${roomSettingsBounds.playerLives.min}" max="${roomSettingsBounds.playerLives.max}" step="${roomSettingsBounds.playerLives.step}" value="${roomSettings.playerLives}" ${!isHost || state.activeGame ? "disabled" : ""} />
+          </label>
+          <label>
+            <span>max ship speed</span>
+            <input name="maxShipSpeed" type="number" min="${roomSettingsBounds.maxShipSpeed.min}" max="${roomSettingsBounds.maxShipSpeed.max}" step="${roomSettingsBounds.maxShipSpeed.step}" value="${roomSettings.maxShipSpeed}" ${!isHost || state.activeGame ? "disabled" : ""} />
+          </label>
+          <label class="settings-toggle">
+            <input name="friendlyFire" type="checkbox" ${roomSettings.friendlyFire ? "checked" : ""} ${!isHost || state.activeGame ? "disabled" : ""} />
+            <span>friendly fire + collisions</span>
+          </label>
+        </div>
+      </section>
       ${renderAsteroidEditor(asteroidNames)}
     `)
 
@@ -217,9 +257,20 @@ export const renderLobby = (state: AppState) => {
     const leaveButton = state.app.querySelector<HTMLButtonElement>(".leave-lobby-button")
     const shareInput = state.app.querySelector<HTMLInputElement>(".share-url")
     const copyInviteButton = state.app.querySelector<HTMLButtonElement>(".copy-invite-button")
+    const roomSettingsElement = state.app.querySelector<HTMLElement>(".room-settings")
+    const randomizeSettingsButton = state.app.querySelector<HTMLButtonElement>(".randomize-settings-button")
     const asteroidNameEditor = state.app.querySelector<HTMLElement>(".asteroid-name-editor")
 
-    if (!playerList || !startButton || !leaveButton || !shareInput || !copyInviteButton || !asteroidNameEditor) {
+    if (
+      !playerList ||
+      !startButton ||
+      !leaveButton ||
+      !shareInput ||
+      !copyInviteButton ||
+      !roomSettingsElement ||
+      !randomizeSettingsButton ||
+      !asteroidNameEditor
+    ) {
       throw new Error("Room failed to render")
     }
 
@@ -258,6 +309,39 @@ export const renderLobby = (state: AppState) => {
       }
 
       copyInviteButton.disabled = false
+    })
+    const sendRoomSettings = () => {
+      if (!isHost || state.activeGame) {
+        return
+      }
+
+      const form = new FormData()
+      const mapSize = roomSettingsElement.querySelector<HTMLSelectElement>("select[name='mapSize']")
+      const asteroidDensity = roomSettingsElement.querySelector<HTMLInputElement>("input[name='asteroidDensity']")
+      const playerLives = roomSettingsElement.querySelector<HTMLInputElement>("input[name='playerLives']")
+      const maxShipSpeed = roomSettingsElement.querySelector<HTMLInputElement>("input[name='maxShipSpeed']")
+      const friendlyFire = roomSettingsElement.querySelector<HTMLInputElement>("input[name='friendlyFire']")
+
+      form.set("mapSize", mapSize?.value ?? roomSettings.mapSize)
+      form.set("asteroidDensity", asteroidDensity?.value ?? String(roomSettings.asteroidDensity))
+      form.set("playerLives", playerLives?.value ?? String(roomSettings.playerLives))
+      form.set("maxShipSpeed", maxShipSpeed?.value ?? String(roomSettings.maxShipSpeed))
+      roomSettings = sanitizeRoomSettings({
+        mapSize: String(form.get("mapSize")),
+        asteroidDensity: Number(form.get("asteroidDensity")),
+        playerLives: Number(form.get("playerLives")),
+        friendlyFire: friendlyFire?.checked ?? false,
+        maxShipSpeed: Number(form.get("maxShipSpeed"))
+      })
+      state.lobbyConnection?.setRoomSettings(roomSettings)
+      render()
+    }
+    roomSettingsElement.addEventListener("change", sendRoomSettings)
+    roomSettingsElement.querySelector<HTMLInputElement>("input[name='asteroidDensity']")?.addEventListener("input", sendRoomSettings)
+    randomizeSettingsButton.addEventListener("click", () => {
+      roomSettings = createRandomRoomSettings()
+      state.lobbyConnection?.setRoomSettings(roomSettings)
+      render()
     })
     startButton.addEventListener("click", () => {
       if (isHost) {
@@ -374,6 +458,7 @@ export const renderLobby = (state: AppState) => {
       state.currentLobbyHostId = message.hostId
       lobbyPlayers = message.players
       asteroidNames = message.asteroidNames
+      roomSettings = message.settings
       state.currentUsername =
         message.players.find((player) => player.id === message.selfId)?.username ?? state.currentUsername
       pendingSlug = undefined
@@ -395,10 +480,11 @@ export const renderLobby = (state: AppState) => {
         state.activeGame.lives = {
           players: message.players.map((player) => ({
             ...player,
-            lives: getLife(state.activeGame?.lives, player.id)?.lives ?? gameConfig.playerStartingLives,
+            lives: getLife(state.activeGame?.lives, player.id)?.lives ?? roomSettings.playerLives,
             isEliminated: getLife(state.activeGame?.lives, player.id)?.isEliminated ?? false
           }))
         }
+        state.activeGame.settings = message.settings
         renderScorePanel(state.activeGame.scores)
       }
       renderPlayerHeader(state)
@@ -409,7 +495,8 @@ export const renderLobby = (state: AppState) => {
     onGameStarted: (message) => {
       state.currentLobbySlug = message.slug
       state.currentLobbyHostId = message.hostId
-      startGame(state, message.players, message.selfId)
+      roomSettings = message.settings
+      startGame(state, message.players, message.selfId, message.settings)
     },
     onPlayerState: (message) => {
       if (message.playerId !== state.activeGame?.selfId) {

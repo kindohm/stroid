@@ -14,6 +14,7 @@ import type {
   ScoreState,
   ServerLobbyMessage
 } from "../../shared/lobby-types"
+import { defaultRoomSettings, sanitizeRoomSettings, type RoomSettings } from "../../shared/room-settings"
 import { asteroidNameSizeByAsteroidSize } from "./asteroid-name-size-by-asteroid-size"
 import { createLobbyAsteroids } from "./create-lobby-asteroids"
 import { createLobbyBroadcaster } from "./create-lobby-broadcaster"
@@ -51,6 +52,7 @@ export const createLobby = ({
   const powerUpEffectsByClientId = new Map<string, Map<PowerUpType, number>>()
   const asteroidStatsByClientId = new Map<string, PlayerAsteroidStats>()
   let asteroidNames = defaultAsteroidNames
+  let settings: RoomSettings = defaultRoomSettings
   let gameInProgress = false
   let gameOver = false
 
@@ -87,7 +89,7 @@ export const createLobby = ({
 
   const getLifeState = (): LifeState => ({
     players: getPlayers().map((player) => {
-      const lives = livesByClientId.get(player.id) ?? gameConfig.playerStartingLives
+      const lives = livesByClientId.get(player.id) ?? settings.playerLives
 
       return {
         ...player,
@@ -190,7 +192,8 @@ export const createLobby = ({
       hostId: hostClientId,
       selfId: client.id,
       players: getPlayers(),
-      asteroidNames
+      asteroidNames,
+      settings
     }
 
     sendMessage(client, message)
@@ -240,11 +243,13 @@ export const createLobby = ({
 
   const lobbyAsteroids = createLobbyAsteroids({
     getAsteroidNames: () => asteroidNames,
+    getSettings: () => settings,
     isFrozen: hasActiveAsteroidFreeze,
     onChanged: broadcastAsteroidState
   })
 
   const lobbyPowerUps = createLobbyPowerUps({
+    getSettings: () => settings,
     onChanged: (powerUps) => {
       if (expirePowerUpEffects()) {
         broadcastPowerUpEffectState()
@@ -268,7 +273,8 @@ export const createLobby = ({
       hostId: hostClientId,
       selfId: client.id,
       players: getPlayers(),
-      asteroidNames
+      asteroidNames,
+      settings
     }
 
     sendMessage(client, message)
@@ -280,7 +286,7 @@ export const createLobby = ({
     asteroidStatsByClientId.clear()
     powerUpEffectsByClientId.clear()
     getPlayers().forEach((player) => {
-      livesByClientId.set(player.id, gameConfig.playerStartingLives)
+      livesByClientId.set(player.id, settings.playerLives)
       asteroidStatsByClientId.set(player.id, createEmptyAsteroidStats(player))
     })
     gameInProgress = true
@@ -317,7 +323,7 @@ export const createLobby = ({
       return
     }
 
-    const currentLives = livesByClientId.get(client.id) ?? gameConfig.playerStartingLives
+    const currentLives = livesByClientId.get(client.id) ?? settings.playerLives
 
     if (currentLives <= 0) {
       return
@@ -465,7 +471,7 @@ export const createLobby = ({
     }
 
     if (message.type === "setAsteroidNames") {
-      if (client.username) {
+      if (client.username && !gameInProgress) {
         asteroidNames = message.asteroidNames
         broadcastLobbyState()
       }
@@ -473,8 +479,17 @@ export const createLobby = ({
       return
     }
 
+    if (message.type === "setRoomSettings") {
+      if (client.id === hostClientId && client.username && !gameInProgress) {
+        settings = sanitizeRoomSettings(message.settings)
+        broadcastLobbyState()
+      }
+
+      return
+    }
+
     if (message.type === "playerState") {
-      if (client.username && !gameOver && (livesByClientId.get(client.id) ?? gameConfig.playerStartingLives) > 0) {
+      if (client.username && !gameOver && (livesByClientId.get(client.id) ?? settings.playerLives) > 0) {
         broadcastPlayerState(client, message.ship)
       }
 
@@ -487,7 +502,7 @@ export const createLobby = ({
     }
 
     if (message.type === "projectileFired") {
-      if (client.username && !gameOver && (livesByClientId.get(client.id) ?? gameConfig.playerStartingLives) > 0) {
+      if (client.username && !gameOver && (livesByClientId.get(client.id) ?? settings.playerLives) > 0) {
         broadcastProjectileFired(client, message.projectile)
       }
 
