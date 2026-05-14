@@ -7,6 +7,8 @@ import type {
   AsteroidNamePools,
   AsteroidStatsState,
   ClientLobbyMessage,
+  GameRecap,
+  GameRecapEvent,
   LifeState,
   LobbyPlayer,
   LobbySummary,
@@ -38,6 +40,10 @@ const asteroidScoreBySize: Record<AsteroidSize, number> = {
   small: 300
 }
 
+const recapEventLimit = 40
+const finalRecapSeconds = 10
+const scoreStreakSeconds = 5
+
 export const createLobby = ({
   hostId = "",
   slug = "local-lobby",
@@ -51,6 +57,8 @@ export const createLobby = ({
   const livesByClientId = new Map<string, number>()
   const powerUpEffectsByClientId = new Map<string, Map<PowerUpType, number>>()
   const asteroidStatsByClientId = new Map<string, PlayerAsteroidStats>()
+  let gameStartedAt = Date.now()
+  let recapEvents: GameRecapEvent[] = []
   let asteroidNames = defaultAsteroidNames
   let settings: RoomSettings = defaultRoomSettings
   let gameInProgress = false
@@ -98,6 +106,51 @@ export const createLobby = ({
       }
     })
   })
+
+  const getElapsedSeconds = () => Math.max(0, (Date.now() - gameStartedAt) / 1000)
+
+  const recordRecapEvent = (event: GameRecapEvent) => {
+    recapEvents = [...recapEvents, event].slice(-recapEventLimit)
+  }
+
+  const createRecap = (): GameRecap => {
+    const gameOverEvent = [...recapEvents].reverse().find((event) => event.type === "gameOver")
+    const gameLengthSeconds = gameOverEvent?.elapsedSeconds ?? getElapsedSeconds()
+    const asteroidEvents = recapEvents.filter((event) => event.type === "asteroidDestroyed")
+    const playerDestroyedEvents = recapEvents.filter((event) => event.type === "playerDestroyed")
+    const streaks = asteroidEvents.flatMap((event, index) => {
+      const streakEvents = asteroidEvents.filter(
+        (nextEvent) =>
+          nextEvent.player.id === event.player.id &&
+          nextEvent.elapsedSeconds >= event.elapsedSeconds &&
+          nextEvent.elapsedSeconds - event.elapsedSeconds <= scoreStreakSeconds
+      )
+
+      if (streakEvents.length === 0 || asteroidEvents.findIndex((nextEvent) => nextEvent === event) !== index) {
+        return []
+      }
+
+      return [{
+        player: event.player,
+        score: streakEvents.reduce((total, streakEvent) => total + streakEvent.scoreDelta, 0),
+        asteroidCount: streakEvents.length,
+        startedAt: event.elapsedSeconds,
+        endedAt: streakEvents.at(-1)?.elapsedSeconds ?? event.elapsedSeconds
+      }]
+    })
+    const biggestScoreStreak = streaks
+      .sort((left, right) => right.score - left.score || right.asteroidCount - left.asteroidCount)[0]
+
+    return {
+      events: recapEvents,
+      highlights: {
+        firstPlayerHit: playerDestroyedEvents[0],
+        finalAsteroidDestroyed: asteroidEvents.at(-1),
+        biggestScoreStreak,
+        finalTenSeconds: recapEvents.filter((event) => gameLengthSeconds - event.elapsedSeconds <= finalRecapSeconds)
+      }
+    }
+  }
 
   const getPowerUpEffects = (): ActivePowerUpEffect[] => {
     const now = Date.now()
@@ -225,7 +278,8 @@ export const createLobby = ({
       type: "gameOver",
       scores: getScoreState(),
       lives: getLifeState(),
-      asteroidStats: getAsteroidStatsState()
+      asteroidStats: getAsteroidStatsState(),
+      recap: createRecap()
     })
   }
 
@@ -291,6 +345,13 @@ export const createLobby = ({
     })
     gameInProgress = true
     gameOver = false
+    gameStartedAt = Date.now()
+    recapEvents = []
+    recordRecapEvent({
+      type: "gameStarted",
+      elapsedSeconds: 0,
+      label: "room launched"
+    })
     lobbyAsteroids.reset()
     lobbyPowerUps.reset()
     lobbyAsteroids.start()
@@ -317,7 +378,8 @@ export const createLobby = ({
 
   const handlePlayerHit = (
     client: LobbyClient,
-    ship: Extract<ClientLobbyMessage, { type: "playerHit" }>["ship"]
+    ship: Extract<ClientLobbyMessage, { type: "playerHit" }>["ship"],
+    cause: Extract<ClientLobbyMessage, { type: "playerHit" }>["cause"] = "unknown"
   ) => {
     if (!gameInProgress || gameOver || !client.username) {
       return
@@ -329,8 +391,21 @@ export const createLobby = ({
       return
     }
 
-    livesByClientId.set(client.id, Math.max(0, currentLives - 1))
+    const nextLives = Math.max(0, currentLives - 1)
+
+    livesByClientId.set(client.id, nextLives)
     broadcastPlayerDestroyed(client, ship)
+    const player = getPlayers().find((nextPlayer) => nextPlayer.id === client.id)
+
+    if (player) {
+      recordRecapEvent({
+        type: "playerDestroyed",
+        elapsedSeconds: getElapsedSeconds(),
+        player,
+        cause: cause ?? "unknown",
+        livesRemaining: nextLives
+      })
+    }
     broadcastLifeState()
 
     const players = getLifeState().players
@@ -340,6 +415,11 @@ export const createLobby = ({
       gameInProgress = false
       lobbyAsteroids.stop()
       lobbyPowerUps.stop()
+      recordRecapEvent({
+        type: "gameOver",
+        elapsedSeconds: getElapsedSeconds(),
+        label: "all ships lost"
+      })
       broadcastGameOver()
       onChanged?.()
     }
@@ -360,6 +440,19 @@ export const createLobby = ({
       client.id,
       (scoresByClientId.get(client.id) ?? 0) + asteroidScoreBySize[asteroid.size]
     )
+    const player = getPlayers().find((nextPlayer) => nextPlayer.id === client.id)
+    const asteroidNameSize = asteroidNameSizeByAsteroidSize[asteroid.size]
+
+    if (player) {
+      recordRecapEvent({
+        type: "asteroidDestroyed",
+        elapsedSeconds: getElapsedSeconds(),
+        player,
+        asteroidName: asteroid.name ?? "unnamed",
+        asteroidSize: asteroidNameSize,
+        scoreDelta: asteroidScoreBySize[asteroid.size]
+      })
+    }
     const destroyedMessage: ServerLobbyMessage = {
       type: "asteroidDestroyed",
       asteroid: {
@@ -389,9 +482,18 @@ export const createLobby = ({
 
     const effectExpiresAt = Date.now() + gameConfig.powerUpEffectSeconds * 1000
     const effectsByType = powerUpEffectsByClientId.get(client.id) ?? new Map<PowerUpType, number>()
+    const player = getPlayers().find((nextPlayer) => nextPlayer.id === client.id)
 
     effectsByType.set(powerUp.type, effectExpiresAt)
     powerUpEffectsByClientId.set(client.id, effectsByType)
+    if (player) {
+      recordRecapEvent({
+        type: "powerUpCollected",
+        elapsedSeconds: getElapsedSeconds(),
+        player,
+        powerUpType: powerUp.type
+      })
+    }
     broadcaster.sendToJoined({
       type: "powerUpCollected",
       playerId: client.id,
@@ -497,7 +599,7 @@ export const createLobby = ({
     }
 
     if (message.type === "playerHit") {
-      handlePlayerHit(client, message.ship)
+      handlePlayerHit(client, message.ship, message.cause)
       return
     }
 

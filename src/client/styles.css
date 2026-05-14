@@ -730,6 +730,75 @@ button:disabled {
   display: none;
 }
 
+.black-box-panel {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 22px;
+  border: 1px solid rgba(116, 255, 224, 0.22);
+  background:
+    linear-gradient(180deg, rgba(16, 32, 38, 0.58), rgba(5, 7, 10, 0.72)),
+    rgba(5, 7, 10, 0.72);
+  padding: 14px;
+}
+
+.black-box-panel h2,
+.black-box-panel h3 {
+  margin: 0;
+  color: rgba(116, 255, 224, 0.74);
+  font: 700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+}
+
+.black-box-panel h3 {
+  color: rgba(255, 244, 166, 0.72);
+  font-size: 11px;
+}
+
+.black-box-highlights {
+  display: grid;
+  gap: 6px;
+}
+
+.black-box-highlights p {
+  margin: 0;
+  color: rgba(236, 248, 241, 0.84);
+  font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.black-box-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.black-box-event {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 24px;
+  align-items: start;
+  border-top: 1px solid rgba(236, 248, 241, 0.08);
+  color: rgba(236, 248, 241, 0.82);
+  font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding-top: 6px;
+}
+
+.black-box-event span:first-child {
+  color: rgba(116, 255, 224, 0.62);
+}
+
+.black-box-event-gameOver span:last-child,
+.black-box-event-playerDestroyed span:last-child {
+  color: #ff9caf;
+}
+
+.black-box-empty {
+  color: rgba(236, 248, 241, 0.44);
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .game-over-asteroid-leaders h2 {
   margin: 0 0 2px;
   color: rgba(236, 248, 241, 0.72);

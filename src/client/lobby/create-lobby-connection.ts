@@ -3,6 +3,7 @@ import type {
   AsteroidNamePools,
   ClientLobbyMessage,
   NetworkPlayerShip,
+  PlayerDeathCause,
   ServerLobbyMessage
 } from "../../shared/lobby-types"
 import { sanitizeRoomSettings } from "../../shared/room-settings"
@@ -201,13 +202,16 @@ export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessa
       typeof message.lives === "object" &&
       message.lives &&
       typeof message.asteroidStats === "object" &&
-      message.asteroidStats
+      message.asteroidStats &&
+      typeof message.recap === "object" &&
+      message.recap
     ) {
       return {
         type: "gameOver",
         scores: message.scores,
         lives: message.lives,
-        asteroidStats: message.asteroidStats
+        asteroidStats: message.asteroidStats,
+        recap: message.recap
       } as ServerLobbyMessage
     }
 
@@ -429,10 +433,11 @@ export const createLobbyConnection = ({
 
       socket.send(JSON.stringify(message))
     },
-    sendPlayerHit: (ship: NetworkPlayerShip) => {
+    sendPlayerHit: (ship: NetworkPlayerShip, cause: PlayerDeathCause = "unknown") => {
       const message: ClientLobbyMessage = {
         type: "playerHit",
-        ship
+        ship,
+        cause
       }
 
       socket.send(JSON.stringify(message))

@@ -155,7 +155,12 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
     return gamePlayers.find((player) => player.id !== selfId && !isPlayerEliminated(state.activeGame?.lives, player.id))?.id
   }
 
-  const destroyLocalShip = (ship: PlayerShip, now: number, isThrusting: boolean) => {
+  const destroyLocalShip = (
+    ship: PlayerShip,
+    now: number,
+    isThrusting: boolean,
+    cause: "asteroid" | "friendlyProjectile" | "shipCollision"
+  ) => {
     if (localShipStatus !== "alive" || now < invincibleUntil || state.activeGame?.isGameOver) {
       return
     }
@@ -174,7 +179,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       velocity: ship.velocity,
       angle: ship.angle,
       isThrusting
-    })
+    }, cause)
     state.gameAudio?.playPlayerExplosion()
 
     if (localLives <= 0) {
@@ -382,7 +387,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
 
     if (friendlyProjectile) {
       hitProjectileIds.add(friendlyProjectile.id)
-      destroyLocalShip(updatedLocalShip, now, input.thrust)
+      destroyLocalShip(updatedLocalShip, now, input.thrust, "friendlyProjectile")
     }
 
     projectiles = projectiles.filter((projectile) => !hitProjectileIds.has(projectile.id))
@@ -397,7 +402,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       )
 
       if (hitAsteroid) {
-        destroyLocalShip(updatedLocalShip, now, input.thrust)
+        destroyLocalShip(updatedLocalShip, now, input.thrust, "asteroid")
       }
     }
 
@@ -415,7 +420,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
         })
 
       if (hitPlayer) {
-        destroyLocalShip(updatedLocalShip, now, input.thrust)
+        destroyLocalShip(updatedLocalShip, now, input.thrust, "shipCollision")
       }
     }
 

@@ -4,6 +4,7 @@ import { createSocket } from "./create-socket-stub.test-helper"
 
 const playerHitMessage = JSON.stringify({
   type: "playerHit",
+  cause: "asteroid",
   ship: {
     position: { x: 120, y: 140 },
     velocity: { x: 1, y: 2 },
@@ -120,6 +121,12 @@ describe("createLobby", () => {
     const messages = socket.sent.map((message) => JSON.parse(message) as {
       type: string
       lives?: { players: Array<{ lives: number; isEliminated: boolean }> }
+      recap?: {
+        highlights: {
+          firstPlayerHit?: { type: string; cause: string }
+          finalTenSeconds: Array<{ type: string }>
+        }
+      }
     })
     const latestLifeState = messages.filter((message) => message.type === "lifeState").at(-1)
     const gameOver = messages.find((message) => message.type === "gameOver")
@@ -131,6 +138,13 @@ describe("createLobby", () => {
       })
     )
     expect(gameOver?.type).toBe("gameOver")
+    expect(gameOver?.recap?.highlights.firstPlayerHit).toEqual(expect.objectContaining({
+      type: "playerDestroyed",
+      cause: "asteroid"
+    }))
+    expect(gameOver?.recap?.highlights.finalTenSeconds.at(-1)).toEqual(expect.objectContaining({
+      type: "gameOver"
+    }))
     lobby.stop()
   })
 
@@ -342,12 +356,23 @@ describe("createLobby", () => {
             destroyedNamesBySize: Record<string, Record<string, number>>
           }>
         }
+        recap?: {
+          highlights: {
+            finalAsteroidDestroyed?: { asteroidName: string }
+            biggestScoreStreak?: { player: { username: string }; score: number; asteroidCount: number }
+          }
+        }
       })
       .find((message) => message.type === "gameOver")
     const stats = gameOver?.asteroidStats?.players.find((player) => player.username === "mike")
 
     expect(stats?.destroyedBySize[asteroid?.size ?? "large"]).toBe(1)
     expect(stats?.destroyedNamesBySize[asteroid?.size ?? "large"][asteroid?.name ?? ""]).toBe(1)
+    expect(gameOver?.recap?.highlights.finalAsteroidDestroyed?.asteroidName).toBe(asteroid?.name)
+    expect(gameOver?.recap?.highlights.biggestScoreStreak).toEqual(expect.objectContaining({
+      score: 100,
+      asteroidCount: 1
+    }))
     lobby.stop()
   })
 

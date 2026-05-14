@@ -597,7 +597,7 @@ export const renderLobby = (state: AppState) => {
         state.activeGame.lives = message.lives
         renderPlayerHeader(state)
         renderScorePanel(message.scores)
-        renderGameOver(state, message.scores, message.asteroidStats, () => renderLobby(state))
+        renderGameOver(state, message.scores, message.asteroidStats, message.recap, () => renderLobby(state))
       }
     },
     onStatus: (nextStatus) => {

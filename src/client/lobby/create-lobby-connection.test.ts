@@ -168,4 +168,43 @@ describe("parseServerMessage", () => {
       })
     )
   })
+
+  it("parses game over messages with recap", () => {
+    const message = parseServerMessage(JSON.stringify({
+      type: "gameOver",
+      scores: {
+        teamScore: 0,
+        players: []
+      },
+      lives: {
+        players: []
+      },
+      asteroidStats: {
+        players: []
+      },
+      recap: {
+        events: [
+          {
+            type: "gameStarted",
+            elapsedSeconds: 0,
+            label: "room launched"
+          }
+        ],
+        highlights: {
+          finalTenSeconds: []
+        }
+      }
+    }))
+
+    expect(message).toEqual(expect.objectContaining({
+      type: "gameOver",
+      recap: expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            type: "gameStarted"
+          })
+        ]
+      })
+    }))
+  })
 })

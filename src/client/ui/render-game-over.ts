@@ -1,11 +1,124 @@
-import type { AsteroidStatsState, AsteroidNameSize, ScoreState } from "../../shared/lobby-types"
+import type { AsteroidStatsState, AsteroidNameSize, GameRecap, GameRecapEvent, ScoreState } from "../../shared/lobby-types"
 import type { AppState } from "../app/app-state"
 import { asteroidNameSizes } from "../lobby/asteroid-name-options"
+
+const formatTime = (elapsedSeconds: number) => {
+  const minutes = Math.floor(elapsedSeconds / 60)
+  const seconds = Math.floor(elapsedSeconds % 60)
+
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`
+}
+
+const powerUpLabelByType = {
+  shield: "shield",
+  scatterShot: "scatter shot",
+  asteroidFreeze: "asteroid freeze"
+}
+
+const deathCauseLabel = {
+  asteroid: "asteroid impact",
+  friendlyProjectile: "friendly fire",
+  shipCollision: "ship collision",
+  unknown: "ship lost"
+}
+
+const getEventText = (event: GameRecapEvent) => {
+  if (event.type === "gameStarted" || event.type === "gameOver") {
+    return event.label
+  }
+
+  if (event.type === "asteroidDestroyed") {
+    return `${event.player.username} destroyed ${event.asteroidName} +${event.scoreDelta}`
+  }
+
+  if (event.type === "powerUpCollected") {
+    return `${event.player.username} collected ${powerUpLabelByType[event.powerUpType]}`
+  }
+
+  return `${event.player.username} lost a ship - ${deathCauseLabel[event.cause]} (${event.livesRemaining} left)`
+}
+
+const appendRecapEvent = (list: HTMLOListElement, event: GameRecapEvent) => {
+  const item = document.createElement("li")
+  const time = document.createElement("span")
+  const message = document.createElement("span")
+
+  item.className = `black-box-event black-box-event-${event.type}`
+  time.textContent = formatTime(event.elapsedSeconds)
+  message.textContent = getEventText(event)
+
+  if ("player" in event) {
+    message.style.color = event.player.color
+  }
+
+  item.append(time, message)
+  list.append(item)
+}
+
+const renderBlackBox = (recap: GameRecap | undefined) => {
+  const section = document.createElement("section")
+  const heading = document.createElement("h2")
+  const highlights = document.createElement("div")
+  const finalHeading = document.createElement("h3")
+  const finalList = document.createElement("ol")
+  const events = recap?.highlights.finalTenSeconds ?? []
+
+  section.className = "black-box-panel"
+  heading.textContent = "Black Box"
+  highlights.className = "black-box-highlights"
+  finalHeading.textContent = "Final 10 seconds"
+  finalList.className = "black-box-list"
+
+  if (recap?.highlights.firstPlayerHit) {
+    const item = document.createElement("p")
+
+    item.textContent = `First hit: ${getEventText(recap.highlights.firstPlayerHit)}`
+    highlights.append(item)
+  }
+
+  if (recap?.highlights.finalAsteroidDestroyed) {
+    const item = document.createElement("p")
+
+    item.textContent = `Final asteroid: ${getEventText(recap.highlights.finalAsteroidDestroyed)}`
+    highlights.append(item)
+  }
+
+  if (recap?.highlights.biggestScoreStreak) {
+    const streak = recap.highlights.biggestScoreStreak
+    const item = document.createElement("p")
+
+    item.textContent = `Hot streak: ${streak.player.username} scored ${streak.score.toLocaleString()} across ${streak.asteroidCount} hits`
+    item.style.color = streak.player.color
+    highlights.append(item)
+  }
+
+  if (highlights.children.length === 0) {
+    const item = document.createElement("p")
+
+    item.textContent = "No notable signals recorded"
+    highlights.append(item)
+  }
+
+  if (events.length === 0) {
+    const item = document.createElement("li")
+
+    item.className = "black-box-empty"
+    item.textContent = "no final telemetry"
+    finalList.append(item)
+  } else {
+    events.forEach((event) => appendRecapEvent(finalList, event))
+  }
+
+  section.append(heading, highlights, finalHeading, finalList)
+
+  return section
+}
 
 export const renderGameOver = (
   state: AppState,
   scores: ScoreState,
   asteroidStats: AsteroidStatsState | undefined,
+  recap: GameRecap | undefined,
   onBackToLobby: () => void
 ) => {
   document.querySelector(".game-over-panel")?.remove()
@@ -17,6 +130,7 @@ export const renderGameOver = (
   const total = document.createElement("strong")
   const list = document.createElement("ol")
   const asteroidLeaders = document.createElement("section")
+  const blackBox = renderBlackBox(recap)
   const backButton = document.createElement("button")
 
   overlay.className = "game-over-panel"
@@ -118,7 +232,7 @@ export const renderGameOver = (
   backButton.textContent = "Back to lobby"
   backButton.addEventListener("click", onBackToLobby)
 
-  panel.append(eyebrow, title, total, list, asteroidLeaders, backButton)
+  panel.append(eyebrow, title, total, list, blackBox, asteroidLeaders, backButton)
   overlay.append(panel)
   state.app.append(overlay)
 }

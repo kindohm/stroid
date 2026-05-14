@@ -6,6 +6,11 @@ import { defaultAsteroidNames } from "./default-asteroid-names"
 import { sanitizeAsteroidNames } from "./sanitize-asteroid-names"
 import { sanitizeUsername } from "./sanitize-username"
 
+const sanitizeDeathCause = (value: unknown) =>
+  value === "asteroid" || value === "friendlyProjectile" || value === "shipCollision"
+    ? value
+    : "unknown"
+
 export const parseClientMessage = (data: WebSocket.RawData): ClientLobbyMessage | undefined => {
   try {
     const message = JSON.parse(data.toString()) as Partial<ClientLobbyMessage>
@@ -54,7 +59,8 @@ export const parseClientMessage = (data: WebSocket.RawData): ClientLobbyMessage 
     if (message.type === "playerHit" && typeof message.ship === "object" && message.ship) {
       return {
         type: "playerHit",
-        ship: message.ship
+        ship: message.ship,
+        cause: sanitizeDeathCause(message.cause)
       }
     }
 

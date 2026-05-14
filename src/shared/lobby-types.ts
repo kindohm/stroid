@@ -33,6 +33,8 @@ export type PlayerLife = LobbyPlayer & {
   isEliminated: boolean
 }
 
+export type PlayerDeathCause = "asteroid" | "friendlyProjectile" | "shipCollision" | "unknown"
+
 export type LifeState = {
   players: PlayerLife[]
 }
@@ -44,6 +46,57 @@ export type PlayerAsteroidStats = LobbyPlayer & {
 
 export type AsteroidStatsState = {
   players: PlayerAsteroidStats[]
+}
+
+export type GameRecapEvent =
+  | {
+      type: "gameStarted"
+      elapsedSeconds: number
+      label: string
+    }
+  | {
+      type: "asteroidDestroyed"
+      elapsedSeconds: number
+      player: LobbyPlayer
+      asteroidName: string
+      asteroidSize: AsteroidNameSize
+      scoreDelta: number
+    }
+  | {
+      type: "powerUpCollected"
+      elapsedSeconds: number
+      player: LobbyPlayer
+      powerUpType: PowerUp["type"]
+    }
+  | {
+      type: "playerDestroyed"
+      elapsedSeconds: number
+      player: LobbyPlayer
+      cause: PlayerDeathCause
+      livesRemaining: number
+    }
+  | {
+      type: "gameOver"
+      elapsedSeconds: number
+      label: string
+    }
+
+export type GameRecapHighlights = {
+  firstPlayerHit?: Extract<GameRecapEvent, { type: "playerDestroyed" }>
+  finalAsteroidDestroyed?: Extract<GameRecapEvent, { type: "asteroidDestroyed" }>
+  biggestScoreStreak?: {
+    player: LobbyPlayer
+    score: number
+    asteroidCount: number
+    startedAt: number
+    endedAt: number
+  }
+  finalTenSeconds: GameRecapEvent[]
+}
+
+export type GameRecap = {
+  events: GameRecapEvent[]
+  highlights: GameRecapHighlights
 }
 
 export type NetworkPlayerShip = {
@@ -110,6 +163,7 @@ export type ClientLobbyMessage =
   | {
       type: "playerHit"
       ship: NetworkPlayerShip
+      cause?: PlayerDeathCause
     }
   | {
       type: "projectileFired"
@@ -214,4 +268,5 @@ export type ServerLobbyMessage =
       scores: ScoreState
       lives: LifeState
       asteroidStats: AsteroidStatsState
+      recap: GameRecap
     }
