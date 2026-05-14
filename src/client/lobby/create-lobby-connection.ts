@@ -41,6 +41,33 @@ const createSocketUrl = () => {
   return `${protocol}//${window.location.host}/ws`
 }
 
+const sessionStorageKey = "stroid.sessionId"
+
+const createSessionId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID()
+  }
+
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
+const getSessionId = () => {
+  try {
+    const stored = localStorage.getItem(sessionStorageKey)
+
+    if (stored) {
+      return stored
+    }
+
+    const sessionId = createSessionId()
+
+    localStorage.setItem(sessionStorageKey, sessionId)
+    return sessionId
+  } catch {
+    return createSessionId()
+  }
+}
+
 export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessage | undefined => {
   try {
     const message = JSON.parse(String(data)) as Partial<ServerLobbyMessage>
@@ -295,6 +322,7 @@ export const createLobbyConnection = ({
   onStatus("connecting")
 
   const socket = new WebSocket(createSocketUrl())
+  const sessionId = getSessionId()
 
   socket.addEventListener("open", () => {
     onStatus("connected")
@@ -421,7 +449,8 @@ export const createLobbyConnection = ({
     setUsername: (username: string) => {
       const message: ClientLobbyMessage = {
         type: "setUsername",
-        username
+        username,
+        sessionId
       }
 
       socket.send(JSON.stringify(message))

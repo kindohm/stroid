@@ -1,8 +1,31 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import type { LobbySnapshot, LobbyStore } from "./lobby-snapshot"
 import { createLobbyManager } from "./create-lobby-manager"
 import { createSocket } from "./create-socket-stub.test-helper"
 
+const createMemoryStore = () => {
+  const snapshots = new Map<string, LobbySnapshot>()
+  const store: LobbyStore = {
+    delete: async (slug) => {
+      snapshots.delete(slug)
+    },
+    loadAll: async () => [...snapshots.values()],
+    save: async (snapshot) => {
+      snapshots.set(snapshot.slug, snapshot)
+    }
+  }
+
+  return {
+    snapshots,
+    store
+  }
+}
+
 describe("createLobbyManager", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("requires username before creating a lobby", () => {
     const manager = createLobbyManager()
     const socket = createSocket()
@@ -113,8 +136,12 @@ describe("createLobbyManager", () => {
     manager.stop()
   })
 
-  it("removes empty lobbies and rejects joining games in progress", () => {
-    const manager = createLobbyManager()
+  it("keeps empty lobbies during a grace period and rejects joining games in progress", () => {
+    vi.useFakeTimers()
+
+    const manager = createLobbyManager({
+      emptyLobbyGraceMs: 1000
+    })
     const host = createSocket()
     const guest = createSocket()
     const late = createSocket()
@@ -141,7 +168,93 @@ describe("createLobbyManager", () => {
     host.listeners.get("close")?.()
     guest.listeners.get("close")?.()
 
+    expect(manager.getLobbySummaries()).toHaveLength(1)
+
+    vi.advanceTimersByTime(1000)
+
     expect(manager.getLobbySummaries()).toEqual([])
+    manager.stop()
+  })
+
+  it("persists waiting rooms and restores them for shared links", async () => {
+    const { snapshots, store } = createMemoryStore()
+    const manager = createLobbyManager({
+      store
+    })
+    const host = createSocket()
+
+    manager.addClient(host as never)
+    host.listeners.get("message")?.(JSON.stringify({
+      type: "setUsername",
+      username: "mike",
+      sessionId: "host-session"
+    }))
+    host.listeners.get("message")?.(JSON.stringify({ type: "createLobby" }))
+
+    await Promise.resolve()
+
+    const snapshot = [...snapshots.values()][0]
+
+    expect(snapshot).toEqual(expect.objectContaining({
+      hostSessionId: "host-session",
+      hostUsername: "mike"
+    }))
+
+    const restored = createLobbyManager({
+      snapshots: snapshot ? [snapshot] : []
+    })
+    const guest = createSocket()
+
+    restored.addClient(guest as never)
+    guest.listeners.get("message")?.(JSON.stringify({
+      type: "setUsername",
+      username: "zoe",
+      sessionId: "guest-session"
+    }))
+    guest.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", slug: snapshot?.slug }))
+
+    const joined = guest.sent
+      .map((message) => JSON.parse(message) as { type: string; slug?: string; players?: Array<{ username: string }> })
+      .filter((message) => message.type === "lobbyState")
+      .at(-1)
+
+    expect(joined?.slug).toBe(snapshot?.slug)
+    expect(joined?.players?.map((player) => player.username)).toEqual(["zoe"])
+    manager.stop()
+    restored.stop()
+  })
+
+  it("lets a reconnecting host reclaim host controls by session id", () => {
+    const manager = createLobbyManager({
+      emptyLobbyGraceMs: 1000
+    })
+    const host = createSocket()
+    const reconnectedHost = createSocket()
+
+    manager.addClient(host as never)
+    host.listeners.get("message")?.(JSON.stringify({
+      type: "setUsername",
+      username: "mike",
+      sessionId: "host-session"
+    }))
+    host.listeners.get("message")?.(JSON.stringify({ type: "createLobby" }))
+    const slug = manager.getLobbySummaries()[0]?.slug
+
+    host.listeners.get("close")?.()
+    manager.addClient(reconnectedHost as never)
+    reconnectedHost.listeners.get("message")?.(JSON.stringify({
+      type: "setUsername",
+      username: "mike",
+      sessionId: "host-session"
+    }))
+    reconnectedHost.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", slug }))
+    reconnectedHost.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+
+    const started = reconnectedHost.sent
+      .map((message) => JSON.parse(message) as { type: string })
+      .find((message) => message.type === "gameStarted")
+
+    expect(started?.type).toBe("gameStarted")
     manager.stop()
   })
 })

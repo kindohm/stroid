@@ -81,7 +81,8 @@ export const parseClientMessage = (data: WebSocket.RawData): ClientLobbyMessage 
     if (message.type === "setUsername" && typeof message.username === "string") {
       return {
         type: "setUsername",
-        username: sanitizeUsername(message.username)
+        username: sanitizeUsername(message.username),
+        sessionId: typeof message.sessionId === "string" ? message.sessionId.trim().slice(0, 80) : undefined
       }
     }
 

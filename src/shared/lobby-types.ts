@@ -117,6 +117,7 @@ export type ClientLobbyMessage =
   | {
       type: "setUsername"
       username: string
+      sessionId?: string
     }
   | {
       type: "createLobby"

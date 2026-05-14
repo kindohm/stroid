@@ -4,12 +4,15 @@ import { extname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { WebSocketServer } from "ws"
+import { createFileLobbyStore } from "./lobby/create-file-lobby-store"
 import { createLobbyManager } from "./lobby/create-lobby-manager"
 
 const port = Number(process.env.PORT ?? 5173)
 const host = process.env.HOST ?? "127.0.0.1"
 const isProduction = process.env.NODE_ENV === "production"
-const distPath = resolve(fileURLToPath(new URL("../..", import.meta.url)), "dist")
+const rootPath = resolve(fileURLToPath(new URL("../..", import.meta.url)))
+const distPath = resolve(rootPath, "dist")
+const dataPath = resolve(rootPath, "data")
 const contentTypes: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -67,7 +70,11 @@ const createDevelopmentHandler = async () => {
 
 const startServer = async () => {
   const requestHandler = isProduction ? createProductionHandler() : await createDevelopmentHandler()
-  const lobbyManager = createLobbyManager()
+  const lobbyStore = createFileLobbyStore(dataPath)
+  const lobbyManager = createLobbyManager({
+    snapshots: await lobbyStore.loadAll(),
+    store: lobbyStore
+  })
   const server = createServer(requestHandler)
   const socketServer = new WebSocketServer({
     server,

@@ -19,6 +19,7 @@ import { createLobbyBroadcaster } from "../create-lobby-broadcaster"
 import { createLobbyPowerUps } from "../create-lobby-power-ups"
 import { defaultAsteroidNames } from "../default-asteroid-names"
 import type { LobbyClient } from "../lobby-client"
+import type { LobbySnapshot } from "../lobby-snapshot"
 import { parseClientMessage } from "../parse-client-message"
 import { sendMessage } from "../send-message"
 import { asteroidScoreBySize } from "./asteroid-score-by-size"
@@ -34,7 +35,12 @@ const recapEventLimit = 40
 
 export const createLobby = ({
   hostId = "",
+  hostSessionId = "",
+  hostUsername = "unknown pilot",
   slug = "local-lobby",
+  asteroidNames: initialAsteroidNames = defaultAsteroidNames,
+  settings: initialSettings = defaultRoomSettings,
+  createdAt = Date.now(),
   onChanged,
   onEmpty
 }: Partial<LobbyArgs> = {}) => {
@@ -45,10 +51,12 @@ export const createLobby = ({
   const asteroidStats = createAsteroidStatsTracker()
   const powerUpEffects = createPowerUpEffectStore()
   let hostClientId = hostId
+  let lobbyHostSessionId = hostSessionId
+  let lobbyHostUsername = hostUsername
   let gameStartedAt = Date.now()
   let recapEvents: GameRecapEvent[] = []
-  let asteroidNames = defaultAsteroidNames
-  let settings: RoomSettings = defaultRoomSettings
+  let asteroidNames = initialAsteroidNames
+  let settings: RoomSettings = initialSettings
   let gameInProgress = false
   let gameOver = false
   let bossAsteroid: BossAsteroid | undefined
@@ -63,9 +71,19 @@ export const createLobby = ({
   const getSummary = (): LobbySummary => ({
     slug,
     hostId: hostClientId,
-    hostUsername: clients.get(hostClientId)?.username ?? "unknown pilot",
+    hostUsername: clients.get(hostClientId)?.username ?? lobbyHostUsername,
     playerCount: getPlayers().length,
     gameInProgress
+  })
+
+  const getSnapshot = (): LobbySnapshot => ({
+    slug,
+    hostSessionId: lobbyHostSessionId,
+    hostUsername: clients.get(hostClientId)?.username ?? lobbyHostUsername,
+    asteroidNames,
+    settings,
+    createdAt,
+    updatedAt: Date.now()
   })
 
   const getScoreState = () => createScoreState(getPlayers(), scoresByClientId)
@@ -90,6 +108,21 @@ export const createLobby = ({
     }
 
     sendMessage(client, message)
+  }
+
+  const reclaimHostIfNeeded = (client: LobbyClient) => {
+    if (!client.sessionId) {
+      return
+    }
+
+    if (!lobbyHostSessionId) {
+      lobbyHostSessionId = client.sessionId
+    }
+
+    if (client.sessionId === lobbyHostSessionId) {
+      hostClientId = client.id
+      lobbyHostUsername = client.username ?? lobbyHostUsername
+    }
   }
 
   const broadcastScoreState = () => {
@@ -525,6 +558,7 @@ export const createLobby = ({
         }
 
         client.username = message.username
+        reclaimHostIfNeeded(client)
         broadcastLobbyState()
         broadcastScoreState()
         broadcastLifeState()
@@ -608,6 +642,7 @@ export const createLobby = ({
     }
 
     clients.set(client.id, client)
+    reclaimHostIfNeeded(client)
 
     if (getPlayers().length === 0 && initialAsteroidNames) {
       asteroidNames = initialAsteroidNames
@@ -636,6 +671,7 @@ export const createLobby = ({
   return {
     addClient,
     getPlayers,
+    getSnapshot,
     getSummary,
     handleMessage,
     hasClient: (clientId: string) => clients.has(clientId),

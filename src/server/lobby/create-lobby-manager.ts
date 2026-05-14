@@ -4,13 +4,57 @@ import type { AsteroidNamePools, ClientLobbyMessage } from "../../shared/lobby-t
 import { createLobby } from "./create-lobby/create-lobby"
 import { createReadableLobbySlug } from "./create-readable-lobby-slug"
 import type { LobbyClient } from "./lobby-client"
+import type { LobbySnapshot, LobbyStore } from "./lobby-snapshot"
 import { parseClientMessage } from "./parse-client-message"
 import { sendMessage } from "./send-message"
 
-export const createLobbyManager = () => {
+type CreateLobbyManagerArgs = {
+  emptyLobbyGraceMs?: number
+  snapshots?: LobbySnapshot[]
+  store?: LobbyStore
+}
+
+const defaultEmptyLobbyGraceMs = 30 * 60 * 1000
+
+export const createLobbyManager = ({
+  emptyLobbyGraceMs = defaultEmptyLobbyGraceMs,
+  snapshots = [],
+  store
+}: CreateLobbyManagerArgs = {}) => {
   const clients = new Map<string, LobbyClient>()
   const lobbies = new Map<string, ReturnType<typeof createLobby>>()
   const clientLobbySlug = new Map<string, string>()
+  const emptyLobbyTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+  const deleteStoredLobby = (slug: string) => {
+    store?.delete(slug).catch(() => undefined)
+  }
+
+  const persistLobby = (slug: string) => {
+    const lobby = lobbies.get(slug)
+
+    if (!lobby || !store) {
+      return
+    }
+
+    if (!lobby.isJoinable()) {
+      deleteStoredLobby(slug)
+      return
+    }
+
+    store.save(lobby.getSnapshot()).catch(() => undefined)
+  }
+
+  const clearEmptyLobbyTimer = (slug: string) => {
+    const timer = emptyLobbyTimers.get(slug)
+
+    if (!timer) {
+      return
+    }
+
+    clearTimeout(timer)
+    emptyLobbyTimers.delete(slug)
+  }
 
   const sendLobbyList = (client: LobbyClient) => {
     if (!client.username) {
@@ -40,9 +84,52 @@ export const createLobbyManager = () => {
   }
 
   const deleteLobby = (slug: string) => {
+    clearEmptyLobbyTimer(slug)
     lobbies.delete(slug)
+    deleteStoredLobby(slug)
     broadcastLobbyList()
   }
+
+  const scheduleEmptyLobbyDelete = (slug: string) => {
+    clearEmptyLobbyTimer(slug)
+    persistLobby(slug)
+    emptyLobbyTimers.set(slug, setTimeout(() => {
+      deleteLobby(slug)
+    }, emptyLobbyGraceMs))
+    broadcastLobbyList()
+  }
+
+  const scheduleRestoredEmptyLobbyDelete = (snapshot: LobbySnapshot) => {
+    const remainingGraceMs = Math.max(0, emptyLobbyGraceMs - (Date.now() - snapshot.updatedAt))
+
+    if (remainingGraceMs === 0) {
+      deleteLobby(snapshot.slug)
+      return
+    }
+
+    emptyLobbyTimers.set(snapshot.slug, setTimeout(() => {
+      deleteLobby(snapshot.slug)
+    }, remainingGraceMs))
+  }
+
+  snapshots.forEach((snapshot) => {
+    const lobby = createLobby({
+      hostSessionId: snapshot.hostSessionId,
+      hostUsername: snapshot.hostUsername,
+      slug: snapshot.slug,
+      asteroidNames: snapshot.asteroidNames,
+      settings: snapshot.settings,
+      createdAt: snapshot.createdAt,
+      onChanged: () => {
+        broadcastLobbyList()
+        persistLobby(snapshot.slug)
+      },
+      onEmpty: scheduleEmptyLobbyDelete
+    })
+
+    lobbies.set(snapshot.slug, lobby)
+    scheduleRestoredEmptyLobbyDelete(snapshot)
+  })
 
   const createRoom = (client: LobbyClient, asteroidNames?: AsteroidNamePools) => {
     if (!client.username) {
@@ -58,9 +145,14 @@ export const createLobbyManager = () => {
     const slug = createReadableLobbySlug((nextSlug) => lobbies.has(nextSlug))
     const lobby = createLobby({
       hostId: client.id,
+      hostSessionId: client.sessionId ?? client.id,
+      hostUsername: client.username,
       slug,
-      onChanged: broadcastLobbyList,
-      onEmpty: deleteLobby
+      onChanged: () => {
+        broadcastLobbyList()
+        persistLobby(slug)
+      },
+      onEmpty: scheduleEmptyLobbyDelete
     })
 
     lobbies.set(slug, lobby)
@@ -105,6 +197,7 @@ export const createLobbyManager = () => {
     }
 
     leaveLobby(client)
+    clearEmptyLobbyTimer(slug)
     clientLobbySlug.set(client.id, slug)
     lobby.addClient(client, asteroidNames)
     broadcastLobbyList()
@@ -121,6 +214,7 @@ export const createLobbyManager = () => {
       }
 
       client.username = message.username
+      client.sessionId = message.sessionId
       sendMessage(client, {
         type: "usernameAccepted",
         username: message.username
@@ -183,6 +277,8 @@ export const createLobbyManager = () => {
     addClient,
     getLobbySummaries: () => [...lobbies.values()].map((lobby) => lobby.getSummary()),
     stop: () => {
+      emptyLobbyTimers.forEach((timer) => clearTimeout(timer))
+      emptyLobbyTimers.clear()
       lobbies.forEach((lobby) => lobby.stop())
     }
   }
