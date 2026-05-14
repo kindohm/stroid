@@ -9,7 +9,7 @@ import type {
 import { sanitizeRoomSettings } from "../../shared/room-settings"
 import type { RoomSettings } from "../../shared/room-settings"
 
-type CreateLobbyConnectionArgs = {
+export type CreateLobbyConnectionArgs = {
   onUsernameAccepted: (message: Extract<ServerLobbyMessage, { type: "usernameAccepted" }>) => void
   onUsernameRejected: (message: Extract<ServerLobbyMessage, { type: "usernameRejected" }>) => void
   onLobbyList: (message: Extract<ServerLobbyMessage, { type: "lobbyList" }>) => void

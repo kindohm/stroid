@@ -1,48 +1,33 @@
 import { randomUUID } from "node:crypto"
 import type { WebSocket } from "ws"
-import { assignPlayerColor } from "../../game/assign-player-color"
-import { gameConfig } from "../../shared/game-config"
-import type { ActivePowerUpEffect, Asteroid, AsteroidSize, PowerUpType } from "../../shared/game-types"
+import { gameConfig } from "../../../shared/game-config"
+import type { Asteroid } from "../../../shared/game-types"
 import type {
   AsteroidNamePools,
-  AsteroidStatsState,
   ClientLobbyMessage,
-  GameRecap,
   GameRecapEvent,
-  LifeState,
-  LobbyPlayer,
   LobbySummary,
-  PlayerAsteroidStats,
-  ScoreState,
   ServerLobbyMessage
-} from "../../shared/lobby-types"
-import { defaultRoomSettings, sanitizeRoomSettings, type RoomSettings } from "../../shared/room-settings"
-import { asteroidNameSizeByAsteroidSize } from "./asteroid-name-size-by-asteroid-size"
-import { createLobbyAsteroids } from "./create-lobby-asteroids"
-import { createLobbyBroadcaster } from "./create-lobby-broadcaster"
-import { createLobbyPowerUps } from "./create-lobby-power-ups"
-import { defaultAsteroidNames } from "./default-asteroid-names"
-import type { LobbyClient } from "./lobby-client"
-import { parseClientMessage } from "./parse-client-message"
-import { sendMessage } from "./send-message"
-
-type LobbyArgs = {
-  hostId: string
-  slug: string
-  onChanged?: () => void
-  onEmpty?: (slug: string) => void
-}
-
-const asteroidScoreBySize: Record<AsteroidSize, number> = {
-  extraLarge: 100,
-  large: 100,
-  medium: 200,
-  small: 300
-}
+} from "../../../shared/lobby-types"
+import { defaultRoomSettings, sanitizeRoomSettings, type RoomSettings } from "../../../shared/room-settings"
+import { asteroidNameSizeByAsteroidSize } from "../asteroid-name-size-by-asteroid-size"
+import { createLobbyAsteroids } from "../create-lobby-asteroids"
+import { createLobbyBroadcaster } from "../create-lobby-broadcaster"
+import { createLobbyPowerUps } from "../create-lobby-power-ups"
+import { defaultAsteroidNames } from "../default-asteroid-names"
+import type { LobbyClient } from "../lobby-client"
+import { parseClientMessage } from "../parse-client-message"
+import { sendMessage } from "../send-message"
+import { asteroidScoreBySize } from "./asteroid-score-by-size"
+import { createAsteroidStatsTracker } from "./create-asteroid-stats-tracker"
+import { createGameRecap } from "./create-game-recap"
+import { createLifeState } from "./create-life-state"
+import { createPowerUpEffectStore } from "./create-power-up-effect-store"
+import { createScoreState } from "./create-score-state"
+import { getLobbyPlayers } from "./get-lobby-players"
+import type { LobbyArgs } from "./lobby-args"
 
 const recapEventLimit = 40
-const finalRecapSeconds = 10
-const scoreStreakSeconds = 5
 
 export const createLobby = ({
   hostId = "",
@@ -52,11 +37,11 @@ export const createLobby = ({
 }: Partial<LobbyArgs> = {}) => {
   const clients = new Map<string, LobbyClient>()
   const broadcaster = createLobbyBroadcaster({ clients })
-  let hostClientId = hostId
   const scoresByClientId = new Map<string, number>()
   const livesByClientId = new Map<string, number>()
-  const powerUpEffectsByClientId = new Map<string, Map<PowerUpType, number>>()
-  const asteroidStatsByClientId = new Map<string, PlayerAsteroidStats>()
+  const asteroidStats = createAsteroidStatsTracker()
+  const powerUpEffects = createPowerUpEffectStore()
+  let hostClientId = hostId
   let gameStartedAt = Date.now()
   let recapEvents: GameRecapEvent[] = []
   let asteroidNames = defaultAsteroidNames
@@ -64,14 +49,7 @@ export const createLobby = ({
   let gameInProgress = false
   let gameOver = false
 
-  const getPlayers = (): LobbyPlayer[] =>
-    [...clients.values()]
-      .filter((client) => typeof client.username === "string" && client.username.length > 0)
-      .map((client) => ({
-        id: client.id,
-        username: client.username ?? "",
-        color: assignPlayerColor(client.username ?? "")
-      }))
+  const getPlayers = () => getLobbyPlayers(clients)
 
   const getSummary = (): LobbySummary => ({
     slug,
@@ -81,161 +59,14 @@ export const createLobby = ({
     gameInProgress
   })
 
-  const getScoreState = (): ScoreState => {
-    const players = getPlayers()
-      .map((player) => ({
-        ...player,
-        score: scoresByClientId.get(player.id) ?? 0
-      }))
-      .sort((left, right) => right.score - left.score || left.username.localeCompare(right.username))
+  const getScoreState = () => createScoreState(getPlayers(), scoresByClientId)
 
-    return {
-      teamScore: players.reduce((total, player) => total + player.score, 0),
-      players
-    }
-  }
-
-  const getLifeState = (): LifeState => ({
-    players: getPlayers().map((player) => {
-      const lives = livesByClientId.get(player.id) ?? settings.playerLives
-
-      return {
-        ...player,
-        lives,
-        isEliminated: lives <= 0
-      }
-    })
-  })
+  const getLifeState = () => createLifeState(getPlayers(), livesByClientId, settings.playerLives)
 
   const getElapsedSeconds = () => Math.max(0, (Date.now() - gameStartedAt) / 1000)
 
   const recordRecapEvent = (event: GameRecapEvent) => {
     recapEvents = [...recapEvents, event].slice(-recapEventLimit)
-  }
-
-  const createRecap = (): GameRecap => {
-    const gameOverEvent = [...recapEvents].reverse().find((event) => event.type === "gameOver")
-    const gameLengthSeconds = gameOverEvent?.elapsedSeconds ?? getElapsedSeconds()
-    const asteroidEvents = recapEvents.filter((event) => event.type === "asteroidDestroyed")
-    const playerDestroyedEvents = recapEvents.filter((event) => event.type === "playerDestroyed")
-    const streaks = asteroidEvents.flatMap((event, index) => {
-      const streakEvents = asteroidEvents.filter(
-        (nextEvent) =>
-          nextEvent.player.id === event.player.id &&
-          nextEvent.elapsedSeconds >= event.elapsedSeconds &&
-          nextEvent.elapsedSeconds - event.elapsedSeconds <= scoreStreakSeconds
-      )
-
-      if (streakEvents.length === 0 || asteroidEvents.findIndex((nextEvent) => nextEvent === event) !== index) {
-        return []
-      }
-
-      return [{
-        player: event.player,
-        score: streakEvents.reduce((total, streakEvent) => total + streakEvent.scoreDelta, 0),
-        asteroidCount: streakEvents.length,
-        startedAt: event.elapsedSeconds,
-        endedAt: streakEvents.at(-1)?.elapsedSeconds ?? event.elapsedSeconds
-      }]
-    })
-    const biggestScoreStreak = streaks
-      .sort((left, right) => right.score - left.score || right.asteroidCount - left.asteroidCount)[0]
-
-    return {
-      events: recapEvents,
-      highlights: {
-        firstPlayerHit: playerDestroyedEvents[0],
-        finalAsteroidDestroyed: asteroidEvents.at(-1),
-        biggestScoreStreak,
-        finalTenSeconds: recapEvents.filter((event) => gameLengthSeconds - event.elapsedSeconds <= finalRecapSeconds)
-      }
-    }
-  }
-
-  const getPowerUpEffects = (): ActivePowerUpEffect[] => {
-    const now = Date.now()
-
-    return [...powerUpEffectsByClientId.entries()].flatMap(([playerId, effectsByType]) =>
-      [...effectsByType.entries()]
-        .filter(([, expiresAt]) => expiresAt > now)
-        .map(([type, expiresAt]) => ({
-          playerId,
-          type,
-          expiresAt
-        }))
-    )
-  }
-
-  const expirePowerUpEffects = () => {
-    const now = Date.now()
-    let changed = false
-
-    powerUpEffectsByClientId.forEach((effectsByType, clientId) => {
-      effectsByType.forEach((expiresAt, type) => {
-        if (expiresAt <= now) {
-          effectsByType.delete(type)
-          changed = true
-        }
-      })
-
-      if (effectsByType.size === 0) {
-        powerUpEffectsByClientId.delete(clientId)
-      }
-    })
-
-    return changed
-  }
-
-  const hasActiveAsteroidFreeze = () =>
-    getPowerUpEffects().some((effect) => effect.type === "asteroidFreeze")
-
-  const createEmptyAsteroidStats = (player: LobbyPlayer): PlayerAsteroidStats => ({
-    ...player,
-    destroyedBySize: {
-      extraLarge: 0,
-      large: 0,
-      medium: 0,
-      small: 0
-    },
-    destroyedNamesBySize: {
-      extraLarge: {},
-      large: {},
-      medium: {},
-      small: {}
-    }
-  })
-
-  const getAsteroidStatsState = (): AsteroidStatsState => ({
-    players: getPlayers().map((player) => asteroidStatsByClientId.get(player.id) ?? createEmptyAsteroidStats(player))
-  })
-
-  const recordAsteroidDestroyed = (client: LobbyClient, asteroid: Asteroid) => {
-    const player = getPlayers().find((nextPlayer) => nextPlayer.id === client.id)
-
-    if (!player) {
-      return
-    }
-
-    const size = asteroidNameSizeByAsteroidSize[asteroid.size]
-    const stats = asteroidStatsByClientId.get(client.id) ?? createEmptyAsteroidStats(player)
-    const name = asteroid.name ?? "unnamed"
-
-    asteroidStatsByClientId.set(client.id, {
-      ...stats,
-      username: player.username,
-      color: player.color,
-      destroyedBySize: {
-        ...stats.destroyedBySize,
-        [size]: stats.destroyedBySize[size] + 1
-      },
-      destroyedNamesBySize: {
-        ...stats.destroyedNamesBySize,
-        [size]: {
-          ...stats.destroyedNamesBySize[size],
-          [name]: (stats.destroyedNamesBySize[size][name] ?? 0) + 1
-        }
-      }
-    })
   }
 
   const sendLobbyState = (client: LobbyClient) => {
@@ -269,7 +100,7 @@ export const createLobby = ({
   const broadcastPowerUpEffectState = () => {
     broadcaster.sendToJoined({
       type: "powerUpEffectState",
-      effects: getPowerUpEffects()
+      effects: powerUpEffects.getEffects()
     })
   }
 
@@ -278,8 +109,11 @@ export const createLobby = ({
       type: "gameOver",
       scores: getScoreState(),
       lives: getLifeState(),
-      asteroidStats: getAsteroidStatsState(),
-      recap: createRecap()
+      asteroidStats: asteroidStats.getState(getPlayers()),
+      recap: createGameRecap({
+        events: recapEvents,
+        elapsedSeconds: getElapsedSeconds()
+      })
     })
   }
 
@@ -298,20 +132,20 @@ export const createLobby = ({
   const lobbyAsteroids = createLobbyAsteroids({
     getAsteroidNames: () => asteroidNames,
     getSettings: () => settings,
-    isFrozen: hasActiveAsteroidFreeze,
+    isFrozen: powerUpEffects.hasActiveAsteroidFreeze,
     onChanged: broadcastAsteroidState
   })
 
   const lobbyPowerUps = createLobbyPowerUps({
     getSettings: () => settings,
-    onChanged: (powerUps) => {
-      if (expirePowerUpEffects()) {
+    onChanged: (nextPowerUps) => {
+      if (powerUpEffects.expire()) {
         broadcastPowerUpEffectState()
       }
 
       broadcaster.sendToJoined({
         type: "powerUpState",
-        powerUps
+        powerUps: nextPowerUps
       })
     }
   })
@@ -321,7 +155,7 @@ export const createLobby = ({
       return
     }
 
-    const message: ServerLobbyMessage = {
+    sendMessage(client, {
       type: "gameStarted",
       slug,
       hostId: hostClientId,
@@ -329,20 +163,20 @@ export const createLobby = ({
       players: getPlayers(),
       asteroidNames,
       settings
-    }
-
-    sendMessage(client, message)
+    })
   }
 
   const broadcastGameStarted = () => {
+    const players = getPlayers()
+
     scoresByClientId.clear()
     livesByClientId.clear()
-    asteroidStatsByClientId.clear()
-    powerUpEffectsByClientId.clear()
-    getPlayers().forEach((player) => {
+    asteroidStats.clear()
+    powerUpEffects.clear()
+    players.forEach((player) => {
       livesByClientId.set(player.id, settings.playerLives)
-      asteroidStatsByClientId.set(player.id, createEmptyAsteroidStats(player))
     })
+    asteroidStats.createForPlayers(players)
     gameInProgress = true
     gameOver = false
     gameStartedAt = Date.now()
@@ -367,13 +201,25 @@ export const createLobby = ({
     client: LobbyClient,
     ship: Extract<ClientLobbyMessage, { type: "playerHit" }>["ship"]
   ) => {
-    const message: ServerLobbyMessage = {
+    broadcaster.sendToJoinedExcept({
       type: "playerDestroyed",
       playerId: client.id,
       ship
-    }
+    }, client.id)
+  }
 
-    broadcaster.sendToJoinedExcept(message, client.id)
+  const endGame = () => {
+    gameOver = true
+    gameInProgress = false
+    lobbyAsteroids.stop()
+    lobbyPowerUps.stop()
+    recordRecapEvent({
+      type: "gameOver",
+      elapsedSeconds: getElapsedSeconds(),
+      label: "all ships lost"
+    })
+    broadcastGameOver()
+    onChanged?.()
   }
 
   const handlePlayerHit = (
@@ -392,10 +238,10 @@ export const createLobby = ({
     }
 
     const nextLives = Math.max(0, currentLives - 1)
+    const player = getPlayers().find((nextPlayer) => nextPlayer.id === client.id)
 
     livesByClientId.set(client.id, nextLives)
     broadcastPlayerDestroyed(client, ship)
-    const player = getPlayers().find((nextPlayer) => nextPlayer.id === client.id)
 
     if (player) {
       recordRecapEvent({
@@ -410,18 +256,8 @@ export const createLobby = ({
 
     const players = getLifeState().players
 
-    if (players.length > 0 && players.every((player) => player.isEliminated)) {
-      gameOver = true
-      gameInProgress = false
-      lobbyAsteroids.stop()
-      lobbyPowerUps.stop()
-      recordRecapEvent({
-        type: "gameOver",
-        elapsedSeconds: getElapsedSeconds(),
-        label: "all ships lost"
-      })
-      broadcastGameOver()
-      onChanged?.()
+    if (players.length > 0 && players.every((nextPlayer) => nextPlayer.isEliminated)) {
+      endGame()
     }
   }
 
@@ -436,12 +272,10 @@ export const createLobby = ({
       return
     }
 
-    scoresByClientId.set(
-      client.id,
-      (scoresByClientId.get(client.id) ?? 0) + asteroidScoreBySize[asteroid.size]
-    )
+    const scoreDelta = asteroidScoreBySize[asteroid.size]
     const player = getPlayers().find((nextPlayer) => nextPlayer.id === client.id)
-    const asteroidNameSize = asteroidNameSizeByAsteroidSize[asteroid.size]
+
+    scoresByClientId.set(client.id, (scoresByClientId.get(client.id) ?? 0) + scoreDelta)
 
     if (player) {
       recordRecapEvent({
@@ -449,11 +283,13 @@ export const createLobby = ({
         elapsedSeconds: getElapsedSeconds(),
         player,
         asteroidName: asteroid.name ?? "unnamed",
-        asteroidSize: asteroidNameSize,
-        scoreDelta: asteroidScoreBySize[asteroid.size]
+        asteroidSize: asteroidNameSizeByAsteroidSize[asteroid.size],
+        scoreDelta
       })
     }
-    const destroyedMessage: ServerLobbyMessage = {
+
+    asteroidStats.recordDestroyed(player, asteroid)
+    broadcaster.sendToJoined({
       type: "asteroidDestroyed",
       asteroid: {
         id: asteroid.id,
@@ -461,10 +297,7 @@ export const createLobby = ({
         radius: asteroid.radius,
         size: asteroid.size
       }
-    }
-
-    recordAsteroidDestroyed(client, asteroid)
-    broadcaster.sendToJoined(destroyedMessage)
+    })
     broadcastScoreState()
     broadcastAsteroidState(lobbyAsteroids.getAsteroids())
   }
@@ -481,11 +314,9 @@ export const createLobby = ({
     }
 
     const effectExpiresAt = Date.now() + gameConfig.powerUpEffectSeconds * 1000
-    const effectsByType = powerUpEffectsByClientId.get(client.id) ?? new Map<PowerUpType, number>()
     const player = getPlayers().find((nextPlayer) => nextPlayer.id === client.id)
 
-    effectsByType.set(powerUp.type, effectExpiresAt)
-    powerUpEffectsByClientId.set(client.id, effectsByType)
+    powerUpEffects.setEffect(client.id, powerUp.type, effectExpiresAt)
     if (player) {
       recordRecapEvent({
         type: "powerUpCollected",
@@ -507,31 +338,27 @@ export const createLobby = ({
     client: LobbyClient,
     ship: Extract<ClientLobbyMessage, { type: "playerState" }>["ship"]
   ) => {
-    const message: ServerLobbyMessage = {
+    broadcaster.sendToJoinedExcept({
       type: "playerState",
       playerId: client.id,
       ship
-    }
-
-    broadcaster.sendToJoinedExcept(message, client.id)
+    }, client.id)
   }
 
   const broadcastProjectileFired = (
     client: LobbyClient,
     projectile: Extract<ClientLobbyMessage, { type: "projectileFired" }>["projectile"]
   ) => {
-    const message: ServerLobbyMessage = {
+    broadcaster.sendToJoinedExcept({
       type: "projectileFired",
       playerId: client.id,
       projectile
-    }
-
-    broadcaster.sendToJoinedExcept(message, client.id)
+    }, client.id)
   }
 
   const removeClient = (client: LobbyClient) => {
     clients.delete(client.id)
-    powerUpEffectsByClientId.delete(client.id)
+    powerUpEffects.deletePlayer(client.id)
     broadcastLobbyState()
     broadcastScoreState()
     broadcastLifeState()

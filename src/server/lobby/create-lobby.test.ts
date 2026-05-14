@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createLobby } from "./create-lobby"
+import { createLobby } from "./create-lobby/create-lobby"
 import { createSocket } from "./create-socket-stub.test-helper"
 
 const playerHitMessage = JSON.stringify({

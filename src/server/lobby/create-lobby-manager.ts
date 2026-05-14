@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type { WebSocket } from "ws"
 import type { AsteroidNamePools, ClientLobbyMessage } from "../../shared/lobby-types"
-import { createLobby } from "./create-lobby"
+import { createLobby } from "./create-lobby/create-lobby"
 import { createReadableLobbySlug } from "./create-readable-lobby-slug"
 import type { LobbyClient } from "./lobby-client"
 import { parseClientMessage } from "./parse-client-message"

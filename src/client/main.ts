@@ -1,5 +1,5 @@
 import { createAppState } from "./app/app-state"
-import { renderLobby } from "./lobby/render-lobby"
+import { renderLobby } from "./lobby/render-lobby/render-lobby"
 import "./styles.css"
 
 const app = document.querySelector<HTMLDivElement>("#app")
