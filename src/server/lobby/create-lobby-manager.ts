@@ -215,6 +215,7 @@ export const createLobbyManager = ({
 
       client.username = message.username
       client.sessionId = message.sessionId
+      client.stats = message.stats
       sendMessage(client, {
         type: "usernameAccepted",
         username: message.username

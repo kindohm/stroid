@@ -4,7 +4,7 @@ import { startGame } from "../../game-runtime/start-game"
 import { renderGameOver } from "../../ui/render-game-over"
 import { renderPlayerHeader } from "../../ui/render-player-header"
 import { renderScorePanel } from "../../ui/render-score-panel"
-import { updatePlayerStats } from "../../stats/player-stats"
+import { loadPlayerStats, updatePlayerStats } from "../../stats/player-stats"
 import type { CreateLobbyConnectionArgs } from "../create-lobby-connection"
 import { asteroidExplosionColorBySize, powerUpExplosionColorByType } from "./lobby-explosion-colors"
 import type { LobbyRenderModel } from "./lobby-render-model"
@@ -223,6 +223,7 @@ export const createLobbyMessageHandlers = ({
       updatePlayerStats({
         bestGameScore: message.scores.players.find((player) => player.id === state.activeGame?.selfId)?.score ?? 0
       })
+      state.lobbyConnection?.setPlayerStats(loadPlayerStats())
       renderPlayerHeader(state)
       renderScorePanel(message.scores)
       renderGameOver(state, message.scores, message.asteroidStats, message.recap, () => {

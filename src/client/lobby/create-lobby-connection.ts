@@ -8,6 +8,8 @@ import type {
 } from "../../shared/lobby-types"
 import { sanitizeRoomSettings } from "../../shared/room-settings"
 import type { RoomSettings } from "../../shared/room-settings"
+import type { PlayerStats } from "../../shared/player-stats"
+import { loadPlayerStats } from "../stats/player-stats"
 
 export type CreateLobbyConnectionArgs = {
   onUsernameAccepted: (message: Extract<ServerLobbyMessage, { type: "usernameAccepted" }>) => void
@@ -450,7 +452,8 @@ export const createLobbyConnection = ({
       const message: ClientLobbyMessage = {
         type: "setUsername",
         username,
-        sessionId
+        sessionId,
+        stats: loadPlayerStats()
       }
 
       socket.send(JSON.stringify(message))
@@ -458,7 +461,8 @@ export const createLobbyConnection = ({
     rename: (username: string) => {
       const message: ClientLobbyMessage = {
         type: "renamePlayer",
-        username
+        username,
+        stats: loadPlayerStats()
       }
 
       socket.send(JSON.stringify(message))
@@ -490,6 +494,14 @@ export const createLobbyConnection = ({
     listLobbies: () => {
       const message: ClientLobbyMessage = {
         type: "listLobbies"
+      }
+
+      socket.send(JSON.stringify(message))
+    },
+    setPlayerStats: (stats: PlayerStats) => {
+      const message: ClientLobbyMessage = {
+        type: "setPlayerStats",
+        stats
       }
 
       socket.send(JSON.stringify(message))

@@ -1,10 +1,12 @@
 import type { ActivePowerUpEffect, Asteroid, AsteroidSize, BossAsteroid, PowerUp, Projectile, Vector } from "./game-types"
+import type { PlayerStats } from "./player-stats"
 import type { RoomSettings } from "./room-settings"
 
 export type LobbyPlayer = {
   id: string
   username: string
   color: string
+  stats?: PlayerStats
 }
 
 export type LobbySummary = {
@@ -118,6 +120,7 @@ export type ClientLobbyMessage =
       type: "setUsername"
       username: string
       sessionId?: string
+      stats?: PlayerStats
     }
   | {
       type: "createLobby"
@@ -138,6 +141,11 @@ export type ClientLobbyMessage =
       type: "renamePlayer"
       username: string
       asteroidNames?: AsteroidNamePools
+      stats?: PlayerStats
+    }
+  | {
+      type: "setPlayerStats"
+      stats: PlayerStats
     }
   | {
       type: "setAsteroidNames"

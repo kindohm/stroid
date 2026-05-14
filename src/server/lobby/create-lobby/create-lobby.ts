@@ -558,10 +558,20 @@ export const createLobby = ({
         }
 
         client.username = message.username
+        client.stats = message.stats
         reclaimHostIfNeeded(client)
         broadcastLobbyState()
         broadcastScoreState()
         broadcastLifeState()
+      }
+
+      return
+    }
+
+    if (message.type === "setPlayerStats") {
+      if (client.username) {
+        client.stats = message.stats
+        broadcastLobbyState()
       }
 
       return

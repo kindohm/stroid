@@ -11,7 +11,8 @@ describe("getLobbyPlayers", () => {
     expect(players).toEqual([{
       id: "mike",
       username: "mike",
-      color: expect.any(String)
+      color: expect.any(String),
+      stats: undefined
     }])
   })
 })

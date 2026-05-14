@@ -1,6 +1,7 @@
 import type { WebSocket } from "ws"
 import type { Projectile } from "../../shared/game-types"
 import type { ClientLobbyMessage } from "../../shared/lobby-types"
+import { sanitizePlayerStats } from "../../shared/player-stats"
 import { sanitizeRoomSettings } from "../../shared/room-settings"
 import { defaultAsteroidNames } from "./default-asteroid-names"
 import { sanitizeAsteroidNames } from "./sanitize-asteroid-names"
@@ -82,14 +83,29 @@ export const parseClientMessage = (data: WebSocket.RawData): ClientLobbyMessage 
       return {
         type: "setUsername",
         username: sanitizeUsername(message.username),
-        sessionId: typeof message.sessionId === "string" ? message.sessionId.trim().slice(0, 80) : undefined
+        sessionId: typeof message.sessionId === "string" ? message.sessionId.trim().slice(0, 80) : undefined,
+        stats: sanitizePlayerStats(message.stats)
       }
     }
 
     if (message.type === "renamePlayer" && typeof message.username === "string") {
       return {
         type: "renamePlayer",
-        username: sanitizeUsername(message.username)
+        username: sanitizeUsername(message.username),
+        stats: sanitizePlayerStats(message.stats)
+      }
+    }
+
+    if (message.type === "setPlayerStats") {
+      const stats = sanitizePlayerStats(message.stats)
+
+      if (!stats) {
+        return undefined
+      }
+
+      return {
+        type: "setPlayerStats",
+        stats
       }
     }
 

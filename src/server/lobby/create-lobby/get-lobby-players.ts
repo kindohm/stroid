@@ -8,5 +8,6 @@ export const getLobbyPlayers = (clients: Map<string, LobbyClient>): LobbyPlayer[
     .map((client) => ({
       id: client.id,
       username: client.username ?? "",
-      color: assignPlayerColor(client.username ?? "")
+      color: assignPlayerColor(client.username ?? ""),
+      stats: client.stats
     }))

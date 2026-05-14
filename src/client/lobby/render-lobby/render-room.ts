@@ -12,6 +12,7 @@ import { parseAsteroidNameInputs } from "../parse-asteroid-name-inputs"
 import { renderAsteroidEditor } from "../render-asteroid-editor"
 import { getRoomSettingsFromElement } from "./get-room-settings-from-element"
 import type { LobbyRenderModel } from "./lobby-render-model"
+import { createPilotLogElement } from "./render-pilot-log"
 import { renderLobbyShell } from "./render-lobby-shell"
 import { showToast } from "./show-toast"
 
@@ -121,12 +122,15 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
       const item = document.createElement("li")
       const swatch = document.createElement("span")
       const name = document.createElement("span")
+      const identity = document.createElement("div")
 
       item.className = "player-list-item"
       swatch.className = "player-swatch"
       swatch.style.background = player.color
+      identity.className = "player-identity"
       name.textContent = `${player.username}${player.id === model.selfId ? " / you" : ""}${player.id === state.currentLobbyHostId ? " / host" : ""}`
-      item.append(swatch, name)
+      identity.append(name)
+      item.append(swatch, identity, createPilotLogElement(player.stats))
 
       return item
     })
