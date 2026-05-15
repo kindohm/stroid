@@ -34,6 +34,7 @@ type RenderGameArgs = {
   }
   powerUps?: PowerUp[]
   explosions: RenderExplosion[]
+  isSpectator?: boolean
   timeSeconds: number
 }
 
@@ -637,6 +638,36 @@ const drawHud = (context: CanvasRenderingContext2D, player: PlayerShip, username
   )
 }
 
+const drawSpectatorBanner = (context: CanvasRenderingContext2D, viewport: Vector, timeSeconds: number) => {
+  const pulse = 0.62 + Math.sin(timeSeconds * 4) * 0.22
+  const scanX = ((timeSeconds * 90) % (viewport.x + 260)) - 130
+
+  context.save()
+  context.globalAlpha = pulse
+  context.fillStyle = "rgba(5, 7, 10, 0.68)"
+  context.strokeStyle = "rgba(255, 244, 166, 0.72)"
+  context.lineWidth = 1.5
+  context.beginPath()
+  context.roundRect(Math.max(18, viewport.x / 2 - 172), 72, Math.min(344, viewport.x - 36), 34, 6)
+  context.fill()
+  context.stroke()
+
+  context.globalAlpha = 0.24
+  context.strokeStyle = "rgba(116, 255, 224, 0.86)"
+  context.beginPath()
+  context.moveTo(scanX, 72)
+  context.lineTo(scanX + 110, 106)
+  context.stroke()
+
+  context.globalAlpha = 1
+  context.fillStyle = "rgba(255, 244, 166, 0.94)"
+  context.font = "800 13px ui-monospace, SFMono-Regular, Menlo, monospace"
+  context.textAlign = "center"
+  context.textBaseline = "middle"
+  context.fillText("SPECTATOR MODE", viewport.x / 2, 90)
+  context.restore()
+}
+
 const drawBossHealth = (context: CanvasRenderingContext2D, viewport: Vector, boss: BossAsteroid) => {
   const width = Math.min(420, viewport.x - 36)
   const height = 18
@@ -714,6 +745,7 @@ export const renderGame = ({
   bossCountdown,
   powerUps = [],
   explosions,
+  isSpectator = false,
   timeSeconds
 }: RenderGameArgs) => {
   context.clearRect(0, 0, viewport.x, viewport.y)
@@ -776,6 +808,9 @@ export const renderGame = ({
 
   drawMiniMap(context, viewport, world, players, projectiles, asteroids, boss, powerUps)
   drawHud(context, localPlayer.ship, localPlayer.username)
+  if (isSpectator) {
+    drawSpectatorBanner(context, viewport, timeSeconds)
+  }
   if (boss) {
     drawBossHealth(context, viewport, boss)
   } else if (bossCountdown) {

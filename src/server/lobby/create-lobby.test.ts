@@ -130,6 +130,77 @@ describe("createLobby", () => {
     ])
   })
 
+  it("lets late joins spectate without entering score state", () => {
+    const lobby = createLobby()
+    const host = createSocket()
+    const spectator = createSocket()
+
+    lobby.addClient(host as never)
+    host.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    startReadyGame(host)
+    lobby.addClient(spectator as never)
+    spectator.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "kim" }))
+
+    const spectatorStart = spectator.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        isSpectator?: boolean
+        players?: Array<{ username: string }>
+      })
+      .find((message) => message.type === "gameStarted")
+    const spectatorScore = spectator.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        scores?: { players: Array<{ username: string }> }
+      })
+      .filter((message) => message.type === "scoreState")
+      .at(-1)
+
+    expect(spectatorStart).toEqual(expect.objectContaining({
+      isSpectator: true,
+      players: [
+        expect.objectContaining({ username: "mike" })
+      ]
+    }))
+    expect(spectatorScore?.scores?.players.map((player) => player.username)).toEqual(["mike"])
+    lobby.stop()
+  })
+
+  it("ignores spectator game actions", () => {
+    const lobby = createLobby()
+    const host = createSocket()
+    const spectator = createSocket()
+
+    lobby.addClient(host as never)
+    host.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    startReadyGame(host)
+    lobby.addClient(spectator as never)
+    spectator.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "kim" }))
+
+    const asteroidState = host.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        asteroids?: Array<{ id: string }>
+      })
+      .find((message) => message.type === "asteroidState")
+    const asteroid = asteroidState?.asteroids?.[0]
+
+    expect(asteroid).toBeDefined()
+
+    spectator.listeners.get("message")?.(JSON.stringify({ type: "asteroidHit", asteroidId: asteroid?.id }))
+
+    const latestScore = host.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        scores?: { teamScore: number }
+      })
+      .filter((message) => message.type === "scoreState")
+      .at(-1)
+
+    expect(latestScore?.scores?.teamScore).toBe(0)
+    lobby.stop()
+  })
+
   it("credits asteroid hits to the reporting player", () => {
     const lobby = createLobby()
     const first = createSocket()

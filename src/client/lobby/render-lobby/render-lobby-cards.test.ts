@@ -6,7 +6,7 @@ describe("renderLobbyCards", () => {
     expect(renderLobbyCards([])).toContain("no lobbies yet")
   })
 
-  it("renders lobby metadata and disables live games", () => {
+  it("renders lobby metadata and offers spectating for live games", () => {
     const html = renderLobbyCards([{
       slug: "hot-rock",
       hostId: "mike",
@@ -18,6 +18,6 @@ describe("renderLobbyCards", () => {
     expect(html).toContain("hot-rock")
     expect(html).toContain("mike / 2 pilots")
     expect(html).toContain("in progress")
-    expect(html).toContain("disabled")
+    expect(html).toContain("Spectate")
   })
 })

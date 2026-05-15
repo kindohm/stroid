@@ -67,9 +67,40 @@ describe("parseServerMessage", () => {
         type: "gameStarted",
         slug: "rogue-meteor-402",
         hostId: "host-1",
-        selfId: "host-1"
+        selfId: "host-1",
+        isSpectator: false
       })
     )
+  })
+
+  it("parses spectator game started messages", () => {
+    const message = parseServerMessage(JSON.stringify({
+      type: "gameStarted",
+      slug: "rogue-meteor-402",
+      hostId: "host-1",
+      selfId: "spectator-1",
+      isSpectator: true,
+      players: [
+        {
+          id: "host-1",
+          username: "mike",
+          color: "#74ffe0"
+        }
+      ],
+      asteroidNames: {
+        extraLarge: ["Alpha"],
+        large: ["Beta"],
+        medium: ["Gamma"],
+        small: ["Omega"]
+      },
+      settings: defaultRoomSettings
+    }))
+
+    expect(message).toEqual(expect.objectContaining({
+      type: "gameStarted",
+      selfId: "spectator-1",
+      isSpectator: true
+    }))
   })
 
   it("parses player destruction messages with final ship state", () => {

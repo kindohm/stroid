@@ -25,7 +25,7 @@ export const renderPlayerHeader = (state: AppState) => {
   name.textContent = state.currentUsername
   lives.className = "ship-lives"
   lives.setAttribute("aria-label", `${shipsLeft} ships left`)
-  lives.hidden = !state.activeGame
+  lives.hidden = !state.activeGame || state.activeGame.isSpectator
   for (let index = 0; index < shipsLeft; index += 1) {
     const ship = document.createElement("span")
 

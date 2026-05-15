@@ -111,7 +111,7 @@ export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessa
 
     if (
       message.type === "lobbyJoinRejected" &&
-      (message.reason === "notFound" || message.reason === "gameInProgress" || message.reason === "missingUsername")
+      (message.reason === "notFound" || message.reason === "missingUsername")
     ) {
       return {
         type: "lobbyJoinRejected",
@@ -137,7 +137,8 @@ export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessa
         selfId: message.selfId,
         players: message.players,
         asteroidNames: message.asteroidNames,
-        settings: sanitizeRoomSettings(message.settings)
+        settings: sanitizeRoomSettings(message.settings),
+        isSpectator: message.type === "gameStarted" ? message.isSpectator === true : undefined
       } as ServerLobbyMessage
     }
 

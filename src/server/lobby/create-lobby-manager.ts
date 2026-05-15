@@ -188,14 +188,6 @@ export const createLobbyManager = ({
       return
     }
 
-    if (!lobby.isJoinable()) {
-      sendMessage(client, {
-        type: "lobbyJoinRejected",
-        reason: "gameInProgress"
-      })
-      return
-    }
-
     leaveLobby(client)
     clearEmptyLobbyTimer(slug)
     clientLobbySlug.set(client.id, slug)

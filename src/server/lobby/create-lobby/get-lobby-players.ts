@@ -4,7 +4,7 @@ import type { LobbyClient } from "../lobby-client"
 
 export const getLobbyPlayers = (clients: Map<string, LobbyClient>): LobbyPlayer[] =>
   [...clients.values()]
-    .filter((client) => typeof client.username === "string" && client.username.length > 0)
+    .filter((client) => typeof client.username === "string" && client.username.length > 0 && !client.isSpectator)
     .map((client) => ({
       id: client.id,
       username: client.username ?? "",

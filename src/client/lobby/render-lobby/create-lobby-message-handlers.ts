@@ -61,8 +61,8 @@ export const createLobbyMessageHandlers = ({
   },
   onLobbyJoinRejected: (message) => {
     model.statusMessage =
-      message.reason === "gameInProgress"
-        ? "game already in progress"
+      message.reason === "missingUsername"
+        ? "username required"
         : "lobby does not exist or already closed"
     model.view = message.reason === "notFound" ? "notFound" : "browser"
     render()
@@ -89,7 +89,9 @@ export const createLobbyMessageHandlers = ({
     state.currentLobbySlug = message.slug
     state.currentLobbyHostId = message.hostId
     model.roomSettings = message.settings
-    startGame(state, message.players, message.selfId, message.settings)
+    startGame(state, message.players, message.selfId, message.settings, {
+      isSpectator: message.isSpectator
+    })
   },
   onPlayerState: (message) => {
     if (message.playerId !== state.activeGame?.selfId) {

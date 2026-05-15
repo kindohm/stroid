@@ -11,7 +11,7 @@ export const renderLobbyCards = (lobbies: LobbySummary[]) => {
       <span class="lobby-status ${lobby.gameInProgress ? "is-live" : ""}">
         ${lobby.gameInProgress ? "in progress" : "waiting"}
       </span>
-      <button type="button" data-join-slug="${escapeHtml(lobby.slug)}" ${lobby.gameInProgress ? "disabled" : ""}>Join</button>
+      <button type="button" data-join-slug="${escapeHtml(lobby.slug)}">${lobby.gameInProgress ? "Spectate" : "Join"}</button>
     </li>
   `).join("")
 

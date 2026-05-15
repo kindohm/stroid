@@ -5,7 +5,8 @@ describe("getLobbyPlayers", () => {
   it("returns named clients with assigned colors", () => {
     const players = getLobbyPlayers(new Map([
       ["mike", { id: "mike", username: "mike", socket: {} as never }],
-      ["blank", { id: "blank", username: "", socket: {} as never }]
+      ["blank", { id: "blank", username: "", socket: {} as never }],
+      ["spectator", { id: "spectator", username: "kim", isSpectator: true, socket: {} as never }]
     ]))
 
     expect(players).toEqual([{

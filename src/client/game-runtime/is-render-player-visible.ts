@@ -4,7 +4,7 @@ import { isPlayerEliminated } from "./player-life"
 export const isRenderPlayerVisible = (
   player: LobbyPlayer,
   selfId: string,
-  localShipStatus: "alive" | "destroyed" | "eliminated",
+  localShipStatus: "alive" | "destroyed" | "eliminated" | "spectating",
   lives: LifeState | undefined,
   hiddenPlayerIds: Set<string>
 ) => {

@@ -68,6 +68,8 @@ export const createLobby = ({
 
   const getPlayers = () => getLobbyPlayers(clients)
 
+  const isActivePlayer = (client: LobbyClient) => Boolean(client.username && !client.isSpectator)
+
   const getSummary = (): LobbySummary => ({
     slug,
     hostId: hostClientId,
@@ -228,7 +230,39 @@ export const createLobby = ({
       selfId: client.id,
       players: getPlayers(),
       asteroidNames,
-      settings
+      settings,
+      isSpectator: client.isSpectator
+    })
+  }
+
+  const sendCurrentGameState = (client: LobbyClient) => {
+    sendGameStarted(client)
+    sendMessage(client, {
+      type: "scoreState",
+      scores: getScoreState()
+    })
+    sendMessage(client, {
+      type: "lifeState",
+      lives: getLifeState()
+    })
+    sendMessage(client, {
+      type: "asteroidState",
+      asteroids: lobbyAsteroids.getAsteroids()
+    })
+    sendMessage(client, {
+      type: "powerUpState",
+      powerUps: lobbyPowerUps.getPowerUps()
+    })
+    sendMessage(client, {
+      type: "powerUpEffectState",
+      effects: powerUpEffects.getEffects()
+    })
+    sendMessage(client, {
+      type: "bossState",
+      boss: bossAsteroid,
+      preSpawnActive: bossPreSpawnActive,
+      nextBossWindowAt,
+      bossIntervalMs: settings.bossIntervalMinutes * 60 * 1000
     })
   }
 
@@ -314,6 +348,9 @@ export const createLobby = ({
     asteroidStats.createForPlayers(players)
     gameInProgress = true
     gameOver = false
+    clients.forEach((client) => {
+      client.isSpectator = false
+    })
     gameStartedAt = Date.now()
     recapEvents = []
     recordRecapEvent({
@@ -357,6 +394,9 @@ export const createLobby = ({
       label: "all ships lost"
     })
     resetReadyState()
+    clients.forEach((client) => {
+      client.isSpectator = false
+    })
     broadcastGameOver()
     broadcastLobbyState()
   }
@@ -366,7 +406,7 @@ export const createLobby = ({
     ship: Extract<ClientLobbyMessage, { type: "playerHit" }>["ship"],
     cause: Extract<ClientLobbyMessage, { type: "playerHit" }>["cause"] = "unknown"
   ) => {
-    if (!gameInProgress || gameOver || !client.username) {
+    if (!gameInProgress || gameOver || !isActivePlayer(client)) {
       return
     }
 
@@ -401,7 +441,7 @@ export const createLobby = ({
   }
 
   const handleAsteroidHit = (client: LobbyClient, asteroidIdToHit: string) => {
-    if (!client.username || !gameInProgress || gameOver) {
+    if (!isActivePlayer(client) || !gameInProgress || gameOver) {
       return
     }
 
@@ -442,7 +482,7 @@ export const createLobby = ({
   }
 
   const handlePowerUpHit = (client: LobbyClient, powerUpIdToHit: string) => {
-    if (!client.username || !gameInProgress || gameOver) {
+    if (!isActivePlayer(client) || !gameInProgress || gameOver) {
       return
     }
 
@@ -474,7 +514,7 @@ export const createLobby = ({
   }
 
   const handleBossHit = (client: LobbyClient, bossIdToHit: string) => {
-    if (!client.username || !gameInProgress || gameOver || !bossAsteroid || bossAsteroid.id !== bossIdToHit) {
+    if (!isActivePlayer(client) || !gameInProgress || gameOver || !bossAsteroid || bossAsteroid.id !== bossIdToHit) {
       return
     }
 
@@ -578,6 +618,9 @@ export const createLobby = ({
         broadcastLobbyState()
         broadcastScoreState()
         broadcastLifeState()
+        if (gameInProgress && client.isSpectator) {
+          sendCurrentGameState(client)
+        }
       }
 
       return
@@ -593,7 +636,7 @@ export const createLobby = ({
     }
 
     if (message.type === "setReady") {
-      if (client.username && !gameInProgress) {
+      if (isActivePlayer(client) && !gameInProgress) {
         client.isReady = message.isReady
         broadcastLobbyState()
       }
@@ -602,7 +645,7 @@ export const createLobby = ({
     }
 
     if (message.type === "startGame") {
-      if (client.id === hostClientId && client.username && !gameInProgress && arePlayersReady()) {
+      if (client.id === hostClientId && isActivePlayer(client) && !gameInProgress && arePlayersReady()) {
         broadcastGameStarted()
       }
 
@@ -610,7 +653,7 @@ export const createLobby = ({
     }
 
     if (message.type === "setAsteroidNames") {
-      if (client.username && !gameInProgress) {
+      if (isActivePlayer(client) && !gameInProgress) {
         asteroidNames = message.asteroidNames
         broadcastLobbyState()
       }
@@ -619,7 +662,7 @@ export const createLobby = ({
     }
 
     if (message.type === "setRoomSettings") {
-      if (client.id === hostClientId && client.username && !gameInProgress) {
+      if (client.id === hostClientId && isActivePlayer(client) && !gameInProgress) {
         settings = sanitizeRoomSettings(message.settings)
         broadcastLobbyState()
       }
@@ -628,7 +671,7 @@ export const createLobby = ({
     }
 
     if (message.type === "playerState") {
-      if (client.username && !gameOver && (livesByClientId.get(client.id) ?? settings.playerLives) > 0) {
+      if (isActivePlayer(client) && !gameOver && (livesByClientId.get(client.id) ?? settings.playerLives) > 0) {
         broadcastPlayerState(client, message.ship)
       }
 
@@ -641,7 +684,7 @@ export const createLobby = ({
     }
 
     if (message.type === "projectileFired") {
-      if (client.username && !gameOver && (livesByClientId.get(client.id) ?? settings.playerLives) > 0) {
+      if (isActivePlayer(client) && !gameOver && (livesByClientId.get(client.id) ?? settings.playerLives) > 0) {
         broadcastProjectileFired(client, message.projectile)
       }
 
@@ -676,6 +719,7 @@ export const createLobby = ({
     }
 
     clients.set(client.id, client)
+    client.isSpectator = gameInProgress
     reclaimHostIfNeeded(client)
 
     if (getPlayers().length === 0 && initialAsteroidNames) {
@@ -686,6 +730,10 @@ export const createLobby = ({
     broadcastLobbyState()
     broadcastScoreState()
     broadcastLifeState()
+
+    if (gameInProgress && client.username) {
+      sendCurrentGameState(client)
+    }
 
     if (!("socket" in clientOrSocket)) {
       client.socket.on("message", (data) => {

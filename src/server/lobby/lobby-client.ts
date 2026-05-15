@@ -5,6 +5,7 @@ export type LobbyClient = {
   id: string
   socket: WebSocket
   isReady?: boolean
+  isSpectator?: boolean
   username?: string
   sessionId?: string
   stats?: PlayerStats

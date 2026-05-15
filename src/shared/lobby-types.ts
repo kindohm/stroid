@@ -212,7 +212,7 @@ export type ServerLobbyMessage =
     }
   | {
       type: "lobbyJoinRejected"
-      reason: "notFound" | "gameInProgress" | "missingUsername"
+      reason: "notFound" | "missingUsername"
     }
   | {
       type: "lobbyState"
@@ -231,6 +231,7 @@ export type ServerLobbyMessage =
       players: LobbyPlayer[]
       asteroidNames: AsteroidNamePools
       settings: RoomSettings
+      isSpectator?: boolean
     }
   | {
       type: "playerState"

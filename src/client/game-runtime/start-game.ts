@@ -19,7 +19,19 @@ import { renderPlayerHeader } from "../ui/render-player-header"
 import { renderScorePanel } from "../ui/render-score-panel"
 import { updatePlayerStats } from "../stats/player-stats"
 
-export const startGame = (state: AppState, players: LobbyPlayer[], selfId: string, settings: RoomSettings) => {
+type StartGameOptions = {
+  isSpectator?: boolean
+}
+
+export const startGame = (
+  state: AppState,
+  players: LobbyPlayer[],
+  selfId: string,
+  settings: RoomSettings,
+  options: StartGameOptions = {}
+) => {
+  const isSpectator = options.isSpectator === true || !players.some((player) => player.id === selfId)
+
   state.gameCleanup?.()
   cancelAnimationFrame(state.animationFrame)
   state.keyboard?.destroy()
@@ -27,6 +39,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
 
   state.activeGame = {
     selfId,
+    isSpectator,
     players,
     remoteTargets: new Map(),
     asteroids: [],
@@ -66,9 +79,11 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
   `
   renderPlayerHeader(state)
   renderScorePanel(state.activeGame.scores)
-  updatePlayerStats({
-    gamesPlayed: 1
-  })
+  if (!isSpectator) {
+    updatePlayerStats({
+      gamesPlayed: 1
+    })
+  }
   state.gameAudio?.destroy()
   state.gameAudio = createGameAudio()
   renderAudioControls(state.gameAudio)
@@ -83,10 +98,10 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
     throw new Error("Canvas failed to start")
   }
 
-  const self = players.find((player) => player.id === selfId)
+  const self = players.find((player) => player.id === selfId) ?? players[0]
 
   if (!self) {
-    throw new Error("Cannot start game without local player")
+    throw new Error("Cannot start game without players")
   }
 
   const shipsByPlayerId = new Map<string, PlayerShip>()
@@ -110,18 +125,21 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
   let lastPlayerStateSent = 0
   state.keyboard = createKeyboardInput(window)
   syncShips(players)
-  const initialLocalShip = shipsByPlayerId.get(selfId)
+  const initialObservedPlayerId = isSpectator ? self.id : selfId
+  const initialLocalShip =
+    shipsByPlayerId.get(initialObservedPlayerId) ??
+    createStartingPlayerShip(0, Math.max(1, players.length), world)
 
   if (!initialLocalShip) {
     throw new Error("Local ship failed to initialize")
   }
 
   let previousLocalShip: PlayerShip = initialLocalShip
-  let localShipStatus: "alive" | "destroyed" | "eliminated" = "alive"
+  let localShipStatus: "alive" | "destroyed" | "eliminated" | "spectating" = isSpectator ? "spectating" : "alive"
   let localLives: number = settings.playerLives
   let respawnAt = 0
   let invincibleUntil = performance.now() + gameConfig.playerSpawnInvincibilitySeconds * 1000
-  let followedPlayerId: string | undefined
+  let followedPlayerId: string | undefined = isSpectator ? initialObservedPlayerId : undefined
   let explosions: RenderExplosion[] = []
 
   const hasPowerUpEffect = (playerId: string, type: "shield" | "scatterShot" | "asteroidFreeze") =>
@@ -228,7 +246,18 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       state.incomingExplosions = []
     }
 
-    const localShip = shipsByPlayerId.get(selfId)
+    const observedPlayerId = isSpectator
+      ? chooseFollowedPlayerId(state.activeGame?.players ?? players)
+      : selfId
+
+    if (isSpectator) {
+      followedPlayerId = observedPlayerId
+    }
+
+    const localShip =
+      shipsByPlayerId.get(observedPlayerId ?? selfId) ??
+      shipsByPlayerId.get(selfId) ??
+      previousLocalShip
 
     if (!localShip) {
       throw new Error("Local ship is missing")
@@ -236,7 +265,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
 
     const serverLife = getLife(state.activeGame?.lives, selfId)
 
-    if (serverLife) {
+    if (!isSpectator && serverLife) {
       localLives = serverLife.lives
 
       if (serverLife.isEliminated) {
@@ -254,8 +283,10 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       shipsByPlayerId.set(selfId, respawnShip)
     }
 
-    let updatedLocalShip = shipsByPlayerId.get(selfId) ?? localShip
-    const canControlLocalShip = localShipStatus === "alive" && !state.activeGame?.isGameOver
+    let updatedLocalShip = isSpectator
+      ? localShip
+      : shipsByPlayerId.get(selfId) ?? localShip
+    const canControlLocalShip = !isSpectator && localShipStatus === "alive" && !state.activeGame?.isGameOver
 
     if (canControlLocalShip) {
       updatePlayerStats({
@@ -277,7 +308,9 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       }
     }
 
-    shipsByPlayerId.set(selfId, updatedLocalShip)
+    if (!isSpectator) {
+      shipsByPlayerId.set(selfId, updatedLocalShip)
+    }
     projectiles = updateProjectiles(projectiles, deltaSeconds, world)
 
     if (state.incomingProjectiles.length > 0) {
@@ -494,12 +527,13 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
 
     state.gameAudio?.setThrusting(canControlLocalShip && input.thrust)
 
-    if (localShipStatus === "eliminated") {
+    if (localShipStatus === "eliminated" || isSpectator) {
       followedPlayerId = chooseFollowedPlayerId(gamePlayers)
     }
 
     const renderPlayers = gamePlayers
       .filter((lobbyPlayer) =>
+        !(isSpectator && lobbyPlayer.id === followedPlayerId) &&
         isRenderPlayerVisible(lobbyPlayer, selfId, localShipStatus, state.activeGame?.lives, state.hiddenPlayerIds)
       )
       .map((lobbyPlayer) => ({
@@ -519,9 +553,9 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
       }))
     const followedPlayer = gamePlayers.find((player) => player.id === followedPlayerId)
     const followedShip = followedPlayer ? shipsByPlayerId.get(followedPlayer.id) : undefined
-    const localPlayer = localShipStatus === "eliminated" && followedPlayer && followedShip
+    const localPlayer = (localShipStatus === "eliminated" || isSpectator) && followedPlayer && followedShip
       ? {
-          username: `watching ${followedPlayer.username}`,
+          username: `${isSpectator ? "spectator" : "watching"} ${followedPlayer.username}`,
           ship: followedShip,
           color: followedPlayer.color,
           isThrusting: false,
@@ -561,6 +595,7 @@ export const startGame = (state: AppState, players: LobbyPlayer[], selfId: strin
         : undefined,
       powerUps,
       explosions,
+      isSpectator,
       timeSeconds: now / 1000
     })
 

@@ -8,6 +8,7 @@ import type { GameAudio } from "../audio/create-game-audio"
 
 export type ActiveGame = {
   selfId: string
+  isSpectator: boolean
   players: LobbyPlayer[]
   remoteTargets: Map<string, NetworkPlayerShip>
   asteroids: Asteroid[]

@@ -149,7 +149,7 @@ describe("createLobbyManager", () => {
     manager.stop()
   })
 
-  it("keeps empty lobbies during a grace period and rejects joining games in progress", () => {
+  it("lets late players spectate active games and keeps empty lobbies during a grace period", () => {
     vi.useFakeTimers()
 
     const manager = createLobbyManager({
@@ -174,14 +174,25 @@ describe("createLobbyManager", () => {
     host.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
     late.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", slug }))
 
-    const rejection = late.sent
-      .map((message) => JSON.parse(message) as { type: string; reason?: string })
-      .find((message) => message.type === "lobbyJoinRejected")
+    const spectatorStart = late.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        isSpectator?: boolean
+        players?: Array<{ username: string }>
+      })
+      .find((message) => message.type === "gameStarted")
 
-    expect(rejection?.reason).toBe("gameInProgress")
+    expect(spectatorStart).toEqual(expect.objectContaining({
+      isSpectator: true,
+      players: [
+        expect.objectContaining({ username: "mike" }),
+        expect.objectContaining({ username: "zoe" })
+      ]
+    }))
 
     host.listeners.get("close")?.()
     guest.listeners.get("close")?.()
+    late.listeners.get("close")?.()
 
     expect(manager.getLobbySummaries()).toHaveLength(1)
 
