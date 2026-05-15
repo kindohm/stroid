@@ -6,6 +6,7 @@ export type LobbyPlayer = {
   id: string
   username: string
   color: string
+  isReady?: boolean
   stats?: PlayerStats
 }
 
@@ -154,6 +155,10 @@ export type ClientLobbyMessage =
   | {
       type: "setRoomSettings"
       settings: RoomSettings
+    }
+  | {
+      type: "setReady"
+      isReady: boolean
     }
   | {
       type: "startGame"

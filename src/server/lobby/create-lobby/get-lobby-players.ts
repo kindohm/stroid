@@ -9,5 +9,6 @@ export const getLobbyPlayers = (clients: Map<string, LobbyClient>): LobbyPlayer[
       id: client.id,
       username: client.username ?? "",
       color: assignPlayerColor(client.username ?? ""),
+      isReady: client.isReady ?? false,
       stats: client.stats
     }))

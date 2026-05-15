@@ -12,6 +12,7 @@ describe("getLobbyPlayers", () => {
       id: "mike",
       username: "mike",
       color: expect.any(String),
+      isReady: false,
       stats: undefined
     }])
   })

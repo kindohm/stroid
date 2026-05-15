@@ -169,6 +169,18 @@ export const createLobby = ({
     })
   }
 
+  const arePlayersReady = () => {
+    const players = getPlayers()
+
+    return players.length > 0 && players.every((player) => player.isReady)
+  }
+
+  const resetReadyState = () => {
+    clients.forEach((client) => {
+      client.isReady = false
+    })
+  }
+
   const broadcastLobbyState = () => {
     clients.forEach(sendLobbyState)
     onChanged?.()
@@ -293,6 +305,7 @@ export const createLobby = ({
     bossAsteroid = undefined
     bossPreSpawnActive = false
     bossId = 0
+    resetReadyState()
     lastBossTick = Date.now()
     nextBossWindowAt = lastBossTick + settings.bossIntervalMinutes * 60 * 1000
     players.forEach((player) => {
@@ -343,8 +356,9 @@ export const createLobby = ({
       elapsedSeconds: getElapsedSeconds(),
       label: "all ships lost"
     })
+    resetReadyState()
     broadcastGameOver()
-    onChanged?.()
+    broadcastLobbyState()
   }
 
   const handlePlayerHit = (
@@ -558,6 +572,7 @@ export const createLobby = ({
         }
 
         client.username = message.username
+        client.isReady = false
         client.stats = message.stats
         reclaimHostIfNeeded(client)
         broadcastLobbyState()
@@ -577,8 +592,17 @@ export const createLobby = ({
       return
     }
 
+    if (message.type === "setReady") {
+      if (client.username && !gameInProgress) {
+        client.isReady = message.isReady
+        broadcastLobbyState()
+      }
+
+      return
+    }
+
     if (message.type === "startGame") {
-      if (client.id === hostClientId && client.username && getPlayers().length > 0 && !gameInProgress) {
+      if (client.id === hostClientId && client.username && !gameInProgress && arePlayersReady()) {
         broadcastGameStarted()
       }
 

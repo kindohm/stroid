@@ -25,6 +25,9 @@ type RenderRoomArgs = {
 export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
   const shareUrl = `${window.location.origin}/lobby/${state.currentLobbySlug}`
   const isHost = model.selfId === state.currentLobbyHostId
+  const self = model.lobbyPlayers.find((player) => player.id === model.selfId)
+  const allPlayersReady = model.lobbyPlayers.length > 0 && model.lobbyPlayers.every((player) => player.isReady)
+  const readyCount = model.lobbyPlayers.filter((player) => player.isReady).length
 
   renderLobbyShell({
     state,
@@ -47,9 +50,11 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
         </div>
         <ul class="player-list"></ul>
         <div class="room-actions">
-          <button class="start-button" type="button" ${!isHost || model.lobbyPlayers.length === 0 ? "disabled" : ""}>Start</button>
+          <button class="ready-button secondary-button" type="button" ${state.activeGame ? "disabled" : ""}>${self?.isReady ? "Unready" : "Ready"}</button>
+          <button class="start-button" type="button" ${!isHost || !allPlayersReady ? "disabled" : ""}>Start</button>
           <button class="leave-lobby-button secondary-button" type="button">Leave</button>
         </div>
+        <p class="ready-summary">${readyCount.toLocaleString()} / ${model.lobbyPlayers.length.toLocaleString()} pilots ready</p>
       </section>
       <section class="room-settings" aria-label="Game variant settings">
         <div class="lobby-roster-header">
@@ -96,6 +101,7 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
   })
 
   const playerList = state.app.querySelector<HTMLUListElement>(".player-list")
+  const readyButton = state.app.querySelector<HTMLButtonElement>(".ready-button")
   const startButton = state.app.querySelector<HTMLButtonElement>(".start-button")
   const leaveButton = state.app.querySelector<HTMLButtonElement>(".leave-lobby-button")
   const shareInput = state.app.querySelector<HTMLInputElement>(".share-url")
@@ -106,6 +112,7 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
 
   if (
     !playerList ||
+    !readyButton ||
     !startButton ||
     !leaveButton ||
     !shareInput ||
@@ -123,14 +130,17 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
       const swatch = document.createElement("span")
       const name = document.createElement("span")
       const identity = document.createElement("div")
+      const ready = document.createElement("span")
 
       item.className = "player-list-item"
       swatch.className = "player-swatch"
       swatch.style.background = player.color
       identity.className = "player-identity"
       name.textContent = `${player.username}${player.id === model.selfId ? " / you" : ""}${player.id === state.currentLobbyHostId ? " / host" : ""}`
+      ready.className = `ready-badge ${player.isReady ? "is-ready" : ""}`
+      ready.textContent = player.isReady ? "ready" : "not ready"
       identity.append(name)
-      item.append(swatch, identity, createPilotLogElement(player.stats))
+      item.append(swatch, identity, ready, createPilotLogElement(player.stats))
 
       return item
     })
@@ -175,9 +185,12 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
     render()
   })
   startButton.addEventListener("click", () => {
-    if (isHost) {
+    if (isHost && allPlayersReady) {
       state.lobbyConnection?.startGame()
     }
+  })
+  readyButton.addEventListener("click", () => {
+    state.lobbyConnection?.setReady(!(self?.isReady ?? false))
   })
   leaveButton.addEventListener("click", () => {
     state.lobbyConnection?.leaveLobby()

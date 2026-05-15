@@ -38,6 +38,16 @@ describe("parseClientMessage", () => {
     })
   })
 
+  it("parses ready toggle messages", () => {
+    expect(parseClientMessage(Buffer.from(JSON.stringify({
+      type: "setReady",
+      isReady: true
+    })))).toEqual({
+      type: "setReady",
+      isReady: true
+    })
+  })
+
   it("parses boss hit messages", () => {
     expect(parseClientMessage(Buffer.from(JSON.stringify({
       type: "bossHit",

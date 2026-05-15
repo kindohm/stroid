@@ -36,6 +36,13 @@ export const parseClientMessage = (data: WebSocket.RawData): ClientLobbyMessage 
       }
     }
 
+    if (message.type === "setReady" && typeof message.isReady === "boolean") {
+      return {
+        type: "setReady",
+        isReady: message.isReady
+      }
+    }
+
     if (message.type === "playerState" && typeof message.ship === "object" && message.ship) {
       return {
         type: "playerState",

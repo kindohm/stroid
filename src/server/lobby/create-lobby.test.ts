@@ -12,6 +12,19 @@ const playerHitMessage = JSON.stringify({
     isThrusting: false
   }
 })
+const readyMessage = JSON.stringify({
+  type: "setReady",
+  isReady: true
+})
+
+const setReady = (socket: ReturnType<typeof createSocket>) => {
+  socket.listeners.get("message")?.(readyMessage)
+}
+
+const startReadyGame = (host: ReturnType<typeof createSocket>, players: ReturnType<typeof createSocket>[] = []) => {
+  [host, ...players].forEach(setReady)
+  host.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+}
 
 describe("createLobby", () => {
   afterEach(() => {
@@ -47,7 +60,7 @@ describe("createLobby", () => {
 
     first.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
     second.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
-    first.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(first, [second])
 
     const firstStarted = first.sent
       .map((message) => JSON.parse(message) as { type: string })
@@ -61,6 +74,62 @@ describe("createLobby", () => {
     lobby.stop()
   })
 
+  it("requires every joined player to be ready before starting", () => {
+    const lobby = createLobby()
+    const first = createSocket()
+    const second = createSocket()
+
+    lobby.addClient(first as never)
+    lobby.addClient(second as never)
+
+    first.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    second.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
+    setReady(first)
+    first.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+
+    const earlyStart = first.sent
+      .map((message) => JSON.parse(message) as { type: string })
+      .find((message) => message.type === "gameStarted")
+
+    expect(earlyStart).toBeUndefined()
+
+    setReady(second)
+    first.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+
+    const started = first.sent
+      .map((message) => JSON.parse(message) as { type: string })
+      .find((message) => message.type === "gameStarted")
+
+    expect(started?.type).toBe("gameStarted")
+    lobby.stop()
+  })
+
+  it("broadcasts player ready state in lobby state", () => {
+    const lobby = createLobby()
+    const first = createSocket()
+    const second = createSocket()
+
+    lobby.addClient(first as never)
+    lobby.addClient(second as never)
+
+    first.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    second.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
+    setReady(second)
+
+    const latest = first.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        players?: Array<{ username: string; isReady: boolean }>
+      })
+      .filter((message) => message.type === "lobbyState")
+      .at(-1)
+
+    expect(latest?.players).toEqual([
+      expect.objectContaining({ username: "mike", isReady: false }),
+      expect.objectContaining({ username: "zoe", isReady: true })
+    ])
+  })
+
   it("credits asteroid hits to the reporting player", () => {
     const lobby = createLobby()
     const first = createSocket()
@@ -71,7 +140,7 @@ describe("createLobby", () => {
 
     first.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
     second.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
-    first.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(first, [second])
 
     const asteroidState = first.sent
       .map((message) => JSON.parse(message) as {
@@ -117,7 +186,7 @@ describe("createLobby", () => {
     lobby.addClient(socket as never)
 
     socket.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(socket)
     socket.listeners.get("message")?.(playerHitMessage)
     socket.listeners.get("message")?.(playerHitMessage)
     socket.listeners.get("message")?.(playerHitMessage)
@@ -162,7 +231,7 @@ describe("createLobby", () => {
 
     first.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
     second.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
-    first.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(first, [second])
     first.listeners.get("message")?.(JSON.stringify({
       type: "projectileFired",
       projectile: {
@@ -197,7 +266,7 @@ describe("createLobby", () => {
 
     first.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
     second.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
-    first.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(first, [second])
     first.listeners.get("message")?.(playerHitMessage)
 
     const relayedToFirst = first.sent
@@ -229,7 +298,7 @@ describe("createLobby", () => {
         small: ["Sally"]
       }
     }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(socket)
 
     const lobbyState = socket.sent
       .map((message) => JSON.parse(message) as { type: string; asteroidNames?: { large: string[] } })
@@ -333,7 +402,7 @@ describe("createLobby", () => {
         small: ["Sally"]
       }
     }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(socket)
 
     const asteroidState = socket.sent
       .map((message) => JSON.parse(message) as {
@@ -387,7 +456,7 @@ describe("createLobby", () => {
     lobby.addClient(socket as never)
 
     socket.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(socket)
 
     const firstAsteroidState = socket.sent
       .map((message) => JSON.parse(message) as { type: string; asteroids?: Array<{ id: string }> })
@@ -400,7 +469,7 @@ describe("createLobby", () => {
     socket.listeners.get("message")?.(playerHitMessage)
     socket.listeners.get("message")?.(playerHitMessage)
     socket.listeners.get("message")?.(playerHitMessage)
-    socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(socket)
 
     const secondAsteroidState = socket.sent
       .map((message) => JSON.parse(message) as { type: string; asteroids?: Array<{ id: string }> })
@@ -509,7 +578,7 @@ describe("createLobby", () => {
         maxShipSpeed: 1640
       }
     }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(socket)
     socket.listeners.get("message")?.(playerHitMessage)
 
     const gameOver = socket.sent
@@ -552,7 +621,7 @@ describe("createLobby", () => {
         bossHealthPerPlayer: 5
       }
     }))
-    socket.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
+    startReadyGame(socket)
 
     vi.advanceTimersByTime(60_040)
 

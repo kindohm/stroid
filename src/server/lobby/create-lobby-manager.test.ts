@@ -20,6 +20,14 @@ const createMemoryStore = () => {
     store
   }
 }
+const readyMessage = JSON.stringify({
+  type: "setReady",
+  isReady: true
+})
+
+const setReady = (socket: ReturnType<typeof createSocket>) => {
+  socket.listeners.get("message")?.(readyMessage)
+}
 
 describe("createLobbyManager", () => {
   afterEach(() => {
@@ -72,6 +80,8 @@ describe("createLobbyManager", () => {
     expect(slug).toBeDefined()
 
     guest.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", slug }))
+    setReady(host)
+    setReady(guest)
     guest.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
 
     const guestStarted = guest.sent
@@ -110,6 +120,9 @@ describe("createLobbyManager", () => {
     const firstSlug = manager.getLobbySummaries()[0]?.slug
     secondHost.listeners.get("message")?.(JSON.stringify({ type: "createLobby" }))
     firstGuest.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", slug: firstSlug }))
+    setReady(firstHost)
+    setReady(firstGuest)
+    setReady(secondHost)
     firstHost.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
     secondHost.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
     firstHost.listeners.get("message")?.(JSON.stringify({
@@ -156,6 +169,8 @@ describe("createLobbyManager", () => {
     const slug = manager.getLobbySummaries()[0]?.slug
 
     guest.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", slug }))
+    setReady(host)
+    setReady(guest)
     host.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
     late.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", slug }))
 
@@ -248,6 +263,7 @@ describe("createLobbyManager", () => {
       sessionId: "host-session"
     }))
     reconnectedHost.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", slug }))
+    setReady(reconnectedHost)
     reconnectedHost.listeners.get("message")?.(JSON.stringify({ type: "startGame" }))
 
     const started = reconnectedHost.sent

@@ -571,6 +571,14 @@ export const createLobbyConnection = ({
 
       socket.send(JSON.stringify(message))
     },
+    setReady: (isReady: boolean) => {
+      const message: ClientLobbyMessage = {
+        type: "setReady",
+        isReady
+      }
+
+      socket.send(JSON.stringify(message))
+    },
     startGame: () => {
       const message: ClientLobbyMessage = {
         type: "startGame"
