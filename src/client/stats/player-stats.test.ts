@@ -37,7 +37,8 @@ describe("playerStats", () => {
       powerUpsCollected: {
         shield: 0,
         scatterShot: 0,
-        asteroidFreeze: 0
+        asteroidFreeze: 0,
+        rapidFire: 0
       },
       bossHits: 0,
       bossDefeats: 0,
@@ -95,7 +96,8 @@ describe("playerStats", () => {
       powerUpsCollected: {
         shield: 4,
         scatterShot: 0,
-        asteroidFreeze: 0
+        asteroidFreeze: 0,
+        rapidFire: 0
       },
       bossHits: 9,
       bossDefeats: 0,
@@ -131,7 +133,8 @@ describe("playerStats", () => {
       powerUpsCollected: {
         shield: 0,
         scatterShot: 1,
-        asteroidFreeze: 0
+        asteroidFreeze: 0,
+        rapidFire: 0
       },
       bossHits: 2,
       bossDefeats: 0,
@@ -185,7 +188,8 @@ describe("playerStats", () => {
       powerUpsCollected: {
         shield: 2,
         scatterShot: 1,
-        asteroidFreeze: 0
+        asteroidFreeze: 0,
+        rapidFire: 0
       },
       bossHits: 5,
       bossDefeats: 1,

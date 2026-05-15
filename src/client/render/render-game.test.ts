@@ -23,6 +23,7 @@ const createContextStub = (): ContextStub => {
     moveTo: () => operations.push("moveTo"),
     lineTo: () => operations.push("lineTo"),
     arc: () => operations.push("arc"),
+    ellipse: () => operations.push("ellipse"),
     closePath: () => operations.push("closePath"),
     fill: () => operations.push("fill"),
     stroke: () => operations.push("stroke"),
@@ -396,5 +397,40 @@ describe("renderGame", () => {
     })
 
     expect(context.operations).toContain("fillText:revive zoe")
+  })
+
+  it("draws animated gravity wells", () => {
+    const context = createContextStub()
+
+    renderGame({
+      context,
+      viewport,
+      world,
+      localPlayer: renderPlayer,
+      players: [renderPlayer],
+      projectiles: [],
+      asteroids: [],
+      gravityWells: [
+        {
+          id: "gravity-well-1",
+          position: {
+            x: player.position.x + 120,
+            y: player.position.y
+          },
+          velocity: {
+            x: 30,
+            y: 0
+          },
+          radius: gameConfig.gravityWellRadius,
+          influenceRadius: gameConfig.gravityWellInfluenceRadius,
+          strength: gameConfig.gravityWellStrength
+        }
+      ],
+      explosions: [],
+      timeSeconds: 1
+    })
+
+    expect(context.operations).toContain("ellipse")
+    expect(context.operations).toContain("globalCompositeOperation:lighter")
   })
 })

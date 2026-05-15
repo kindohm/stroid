@@ -2,7 +2,7 @@ import { gameConfig } from "../shared/game-config"
 import type { GameWorld, PowerUp, PowerUpType } from "../shared/game-types"
 import type { RandomSource } from "./random-source"
 
-const powerUpTypes: PowerUpType[] = ["shield", "scatterShot", "asteroidFreeze"]
+const powerUpTypes: PowerUpType[] = ["shield", "scatterShot", "asteroidFreeze", "rapidFire"]
 
 export const createPowerUp = (id: string, world: GameWorld, random: RandomSource): PowerUp => {
   const travelsRight = random() >= 0.5

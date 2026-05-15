@@ -1,4 +1,5 @@
-import type { Asteroid, GameWorld } from "../shared/game-types"
+import type { Asteroid, GameWorld, GravityWell } from "../shared/game-types"
+import { applyGravityWells } from "./apply-gravity-wells"
 
 const wrapAxis = (value: number, max: number) => {
   if (value < 0) {
@@ -15,12 +16,18 @@ const wrapAxis = (value: number, max: number) => {
 export const updateAsteroids = (
   asteroids: Asteroid[],
   deltaSeconds: number,
-  world: GameWorld
+  world: GameWorld,
+  gravityWells: GravityWell[] = []
 ): Asteroid[] =>
-  asteroids.map((asteroid) => ({
-    ...asteroid,
-    position: {
-      x: wrapAxis(asteroid.position.x + asteroid.velocity.x * deltaSeconds, world.width),
-      y: wrapAxis(asteroid.position.y + asteroid.velocity.y * deltaSeconds, world.height)
+  asteroids.map((asteroid) => {
+    const velocity = applyGravityWells(asteroid.velocity, asteroid.position, gravityWells, deltaSeconds)
+
+    return {
+      ...asteroid,
+      velocity,
+      position: {
+        x: wrapAxis(asteroid.position.x + velocity.x * deltaSeconds, world.width),
+        y: wrapAxis(asteroid.position.y + velocity.y * deltaSeconds, world.height)
+      }
     }
-  }))
+  })

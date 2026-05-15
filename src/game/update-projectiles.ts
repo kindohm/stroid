@@ -1,4 +1,5 @@
-import type { GameWorld, Projectile } from "../shared/game-types"
+import type { GameWorld, GravityWell, Projectile } from "../shared/game-types"
+import { applyGravityWells } from "./apply-gravity-wells"
 
 const isInsideWorld = (projectile: Projectile, world: GameWorld) =>
   projectile.position.x >= 0 &&
@@ -9,15 +10,21 @@ const isInsideWorld = (projectile: Projectile, world: GameWorld) =>
 export const updateProjectiles = (
   projectiles: Projectile[],
   deltaSeconds: number,
-  world: GameWorld
+  world: GameWorld,
+  gravityWells: GravityWell[] = []
 ): Projectile[] =>
   projectiles
-    .map((projectile) => ({
-      ...projectile,
-      ttlSeconds: projectile.ttlSeconds - deltaSeconds,
-      position: {
-        x: projectile.position.x + projectile.velocity.x * deltaSeconds,
-        y: projectile.position.y + projectile.velocity.y * deltaSeconds
+    .map((projectile) => {
+      const velocity = applyGravityWells(projectile.velocity, projectile.position, gravityWells, deltaSeconds)
+
+      return {
+        ...projectile,
+        velocity,
+        ttlSeconds: projectile.ttlSeconds - deltaSeconds,
+        position: {
+          x: projectile.position.x + velocity.x * deltaSeconds,
+          y: projectile.position.y + velocity.y * deltaSeconds
+        }
       }
-    }))
+    })
     .filter((projectile) => projectile.ttlSeconds > 0 && isInsideWorld(projectile, world))

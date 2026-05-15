@@ -1,4 +1,4 @@
-import type { ActivePowerUpEffect, Asteroid, BossAsteroid, PowerUp, Projectile } from "../../shared/game-types"
+import type { ActivePowerUpEffect, Asteroid, BossAsteroid, GravityWell, PowerUp, Projectile } from "../../shared/game-types"
 import type { LifeState, LobbyPlayer, NetworkPlayerShip, ScoreState } from "../../shared/lobby-types"
 import type { RoomSettings } from "../../shared/room-settings"
 import type { createKeyboardInput } from "../input/create-keyboard-input"
@@ -17,6 +17,7 @@ export type ActiveGame = {
   nextBossWindowAt: number
   bossIntervalMs: number
   powerUps: PowerUp[]
+  gravityWells: GravityWell[]
   powerUpEffects: ActivePowerUpEffect[]
   settings: RoomSettings
   scores: ScoreState

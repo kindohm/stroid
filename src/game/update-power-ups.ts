@@ -1,4 +1,5 @@
-import type { GameWorld, PowerUp } from "../shared/game-types"
+import type { GameWorld, GravityWell, PowerUp } from "../shared/game-types"
+import { applyGravityWells } from "./apply-gravity-wells"
 
 const isInsidePowerUpTravel = (powerUp: PowerUp, world: GameWorld) =>
   powerUp.position.x >= -powerUp.radius &&
@@ -9,14 +10,20 @@ const isInsidePowerUpTravel = (powerUp: PowerUp, world: GameWorld) =>
 export const updatePowerUps = (
   powerUps: PowerUp[],
   deltaSeconds: number,
-  world: GameWorld
+  world: GameWorld,
+  gravityWells: GravityWell[] = []
 ): PowerUp[] =>
   powerUps
-    .map((powerUp) => ({
-      ...powerUp,
-      position: {
-        x: powerUp.position.x + powerUp.velocity.x * deltaSeconds,
-        y: powerUp.position.y + powerUp.velocity.y * deltaSeconds
+    .map((powerUp) => {
+      const velocity = applyGravityWells(powerUp.velocity, powerUp.position, gravityWells, deltaSeconds)
+
+      return {
+        ...powerUp,
+        velocity,
+        position: {
+          x: powerUp.position.x + velocity.x * deltaSeconds,
+          y: powerUp.position.y + velocity.y * deltaSeconds
+        }
       }
-    }))
+    })
     .filter((powerUp) => isInsidePowerUpTravel(powerUp, world))

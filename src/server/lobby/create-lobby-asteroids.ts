@@ -3,7 +3,7 @@ import { getAsteroidSpeedMultiplier } from "../../game/get-asteroid-speed-multip
 import { splitAsteroid } from "../../game/split-asteroid"
 import { updateAsteroids } from "../../game/update-asteroids"
 import { gameConfig } from "../../shared/game-config"
-import type { Asteroid } from "../../shared/game-types"
+import type { Asteroid, GravityWell } from "../../shared/game-types"
 import type { AsteroidNamePools } from "../../shared/lobby-types"
 import { createGameWorld, getAsteroidDensityTarget, type RoomSettings } from "../../shared/room-settings"
 import { asteroidNameSizeByAsteroidSize } from "./asteroid-name-size-by-asteroid-size"
@@ -11,6 +11,7 @@ import { asteroidNameSizeByAsteroidSize } from "./asteroid-name-size-by-asteroid
 type CreateLobbyAsteroidsArgs = {
   getAsteroidNames: () => AsteroidNamePools
   getSettings: () => RoomSettings
+  getGravityWells?: () => GravityWell[]
   isFrozen?: () => boolean
   canSpawn?: () => boolean
   onChanged: (asteroids: Asteroid[]) => void
@@ -19,6 +20,7 @@ type CreateLobbyAsteroidsArgs = {
 export const createLobbyAsteroids = ({
   getAsteroidNames,
   getSettings,
+  getGravityWells = () => [],
   isFrozen = () => false,
   canSpawn = () => true,
   onChanged
@@ -83,7 +85,7 @@ export const createLobbyAsteroids = ({
       if (!isFrozen()) {
         const world = createGameWorld(getSettings())
 
-        asteroids = updateAsteroids(asteroids, deltaSeconds, world)
+        asteroids = updateAsteroids(asteroids, deltaSeconds, world, getGravityWells())
       }
       fillAsteroidTarget()
       onChanged(asteroids)

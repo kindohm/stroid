@@ -177,6 +177,34 @@ describe("parseServerMessage", () => {
     )
   })
 
+  it("parses gravity well state messages", () => {
+    const message = parseServerMessage(JSON.stringify({
+      type: "gravityWellState",
+      gravityWells: [
+        {
+          id: "gravity-well-1",
+          radius: 44,
+          influenceRadius: 520,
+          strength: 2200000,
+          position: { x: 10, y: 20 },
+          velocity: { x: 30, y: 0 }
+        }
+      ]
+    }))
+
+    expect(message).toEqual(
+      expect.objectContaining({
+        type: "gravityWellState",
+        gravityWells: [
+          expect.objectContaining({
+            id: "gravity-well-1",
+            influenceRadius: 520
+          })
+        ]
+      })
+    )
+  })
+
   it("parses boss state and defeat messages", () => {
     const boss = {
       id: "boss-1",

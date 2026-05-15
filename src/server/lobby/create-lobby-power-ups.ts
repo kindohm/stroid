@@ -1,16 +1,22 @@
 import { createPowerUp } from "../../game/create-power-up"
 import { updatePowerUps } from "../../game/update-power-ups"
 import { gameConfig } from "../../shared/game-config"
-import type { PowerUp } from "../../shared/game-types"
+import type { GravityWell, PowerUp } from "../../shared/game-types"
 import { createGameWorld, type RoomSettings } from "../../shared/room-settings"
 
 type CreateLobbyPowerUpsArgs = {
   getSettings: () => RoomSettings
+  getGravityWells?: () => GravityWell[]
   canSpawn?: () => boolean
   onChanged: (powerUps: PowerUp[]) => void
 }
 
-export const createLobbyPowerUps = ({ getSettings, canSpawn = () => true, onChanged }: CreateLobbyPowerUpsArgs) => {
+export const createLobbyPowerUps = ({
+  getSettings,
+  getGravityWells = () => [],
+  canSpawn = () => true,
+  onChanged
+}: CreateLobbyPowerUpsArgs) => {
   let powerUps: PowerUp[] = []
   let powerUpId = 0
   let powerUpInterval: ReturnType<typeof setInterval> | undefined
@@ -46,7 +52,7 @@ export const createLobbyPowerUps = ({ getSettings, canSpawn = () => true, onChan
       const deltaSeconds = Math.min(0.1, (now - lastPowerUpTick) / 1000)
 
       lastPowerUpTick = now
-      powerUps = updatePowerUps(powerUps, deltaSeconds, createGameWorld(getSettings()))
+      powerUps = updatePowerUps(powerUps, deltaSeconds, createGameWorld(getSettings()), getGravityWells())
 
       if (now >= nextSpawnAt) {
         spawnPowerUp()

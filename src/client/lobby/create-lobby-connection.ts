@@ -1,4 +1,4 @@
-import type { Asteroid, BossAsteroid, Projectile } from "../../shared/game-types"
+import type { Asteroid, BossAsteroid, GravityWell, Projectile } from "../../shared/game-types"
 import type {
   AsteroidNamePools,
   ClientLobbyMessage,
@@ -26,6 +26,7 @@ export type CreateLobbyConnectionArgs = {
   onAsteroidState: (message: Extract<ServerLobbyMessage, { type: "asteroidState" }>) => void
   onAsteroidDestroyed: (message: Extract<ServerLobbyMessage, { type: "asteroidDestroyed" }>) => void
   onPowerUpState: (message: Extract<ServerLobbyMessage, { type: "powerUpState" }>) => void
+  onGravityWellState: (message: Extract<ServerLobbyMessage, { type: "gravityWellState" }>) => void
   onBossState: (message: Extract<ServerLobbyMessage, { type: "bossState" }>) => void
   onBossHit: (message: Extract<ServerLobbyMessage, { type: "bossHit" }>) => void
   onBossDefeated: (message: Extract<ServerLobbyMessage, { type: "bossDefeated" }>) => void
@@ -185,6 +186,13 @@ export const parseServerMessage = (data: MessageEvent["data"]): ServerLobbyMessa
       } as ServerLobbyMessage
     }
 
+    if (message.type === "gravityWellState" && Array.isArray(message.gravityWells)) {
+      return {
+        type: "gravityWellState",
+        gravityWells: message.gravityWells as GravityWell[]
+      }
+    }
+
     if (
       message.type === "bossState" &&
       typeof message.preSpawnActive === "boolean" &&
@@ -312,6 +320,7 @@ export const createLobbyConnection = ({
   onAsteroidState,
   onAsteroidDestroyed,
   onPowerUpState,
+  onGravityWellState,
   onBossState,
   onBossHit,
   onBossDefeated,
@@ -405,6 +414,11 @@ export const createLobbyConnection = ({
 
     if (message?.type === "powerUpState") {
       onPowerUpState(message)
+      return
+    }
+
+    if (message?.type === "gravityWellState") {
+      onGravityWellState(message)
       return
     }
 

@@ -30,7 +30,7 @@ export type Projectile = {
   ttlSeconds: number
 }
 
-export type PowerUpType = "shield" | "scatterShot" | "asteroidFreeze"
+export type PowerUpType = "shield" | "scatterShot" | "asteroidFreeze" | "rapidFire"
 
 export type PowerUp = {
   id: string
@@ -38,6 +38,15 @@ export type PowerUp = {
   position: Vector
   velocity: Vector
   radius: number
+}
+
+export type GravityWell = {
+  id: string
+  position: Vector
+  velocity: Vector
+  radius: number
+  influenceRadius: number
+  strength: number
 }
 
 export type ActivePowerUpEffect = {

@@ -12,7 +12,8 @@ const formatTime = (elapsedSeconds: number) => {
 const powerUpLabelByType = {
   shield: "shield",
   scatterShot: "scatter shot",
-  asteroidFreeze: "asteroid freeze"
+  asteroidFreeze: "asteroid freeze",
+  rapidFire: "rapid fire"
 }
 
 const deathCauseLabel = {

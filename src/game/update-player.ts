@@ -1,5 +1,6 @@
 import { gameConfig } from "../shared/game-config"
-import type { GameWorld, PlayerInput, PlayerShip, Vector } from "../shared/game-types"
+import type { GameWorld, GravityWell, PlayerInput, PlayerShip, Vector } from "../shared/game-types"
+import { applyGravityWells } from "./apply-gravity-wells"
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 
@@ -31,7 +32,8 @@ export const updatePlayer = (
   input: PlayerInput,
   deltaSeconds: number,
   world: GameWorld,
-  maxSpeed: number = gameConfig.maxSpeed
+  maxSpeed: number = gameConfig.maxSpeed,
+  gravityWells: GravityWell[] = []
 ): PlayerShip => {
   const turn = Number(input.turnRight) - Number(input.turnLeft)
   const angle = player.angle + turn * gameConfig.turnSpeed * deltaSeconds
@@ -42,10 +44,10 @@ export const updatePlayer = (
   }
   const drag = Math.max(0, 1 - gameConfig.dragPerSecond * deltaSeconds)
   const velocity = clampToSpeed(
-    {
+    applyGravityWells({
       x: acceleratedVelocity.x * drag,
       y: acceleratedVelocity.y * drag
-    },
+    }, player.position, gravityWells, deltaSeconds),
     maxSpeed
   )
   const nextPosition = {

@@ -10,5 +10,6 @@ export const asteroidExplosionColorBySize: Record<AsteroidSize, string> = {
 export const powerUpExplosionColorByType: Record<PowerUpType, string> = {
   shield: "rgba(116, 255, 224, 0.92)",
   scatterShot: "rgba(255, 244, 166, 0.92)",
-  asteroidFreeze: "rgba(155, 183, 255, 0.92)"
+  asteroidFreeze: "rgba(155, 183, 255, 0.92)",
+  rapidFire: "rgba(255, 159, 67, 0.92)"
 }

@@ -1,5 +1,5 @@
 import { gameConfig } from "../../shared/game-config"
-import type { Asteroid, BossAsteroid, GameWorld, PlayerShip, PowerUp, PowerUpType, Projectile, Vector } from "../../shared/game-types"
+import type { Asteroid, BossAsteroid, GameWorld, GravityWell, PlayerShip, PowerUp, PowerUpType, Projectile, Vector } from "../../shared/game-types"
 
 export type RenderPlayerView = {
   username: string
@@ -39,6 +39,7 @@ type RenderGameArgs = {
     now: number
   }
   powerUps?: PowerUp[]
+  gravityWells?: GravityWell[]
   ghostMarkers?: RenderGhostMarker[]
   explosions: RenderExplosion[]
   isSpectator?: boolean
@@ -499,7 +500,8 @@ const drawBoss = (
 const powerUpColorByType: Record<PowerUpType, string> = {
   shield: "#74ffe0",
   scatterShot: "#fff4a6",
-  asteroidFreeze: "#9bb7ff"
+  asteroidFreeze: "#9bb7ff",
+  rapidFire: "#ff9f43"
 }
 
 const drawPowerUpShape = (
@@ -532,14 +534,29 @@ const drawPowerUpShape = (
     return
   }
 
-  context.beginPath()
-  context.moveTo(0, -radius - pulse)
-  context.lineTo(radius * 0.72, -radius * 0.16)
-  context.lineTo(radius * 0.42, radius * 0.82)
-  context.lineTo(-radius * 0.42, radius * 0.82)
-  context.lineTo(-radius * 0.72, -radius * 0.16)
-  context.closePath()
-  context.stroke()
+  if (type === "asteroidFreeze") {
+    context.beginPath()
+    context.moveTo(0, -radius - pulse)
+    context.lineTo(radius * 0.72, -radius * 0.16)
+    context.lineTo(radius * 0.42, radius * 0.82)
+    context.lineTo(-radius * 0.42, radius * 0.82)
+    context.lineTo(-radius * 0.72, -radius * 0.16)
+    context.closePath()
+    context.stroke()
+    return
+  }
+
+  for (let index = 0; index < 3; index += 1) {
+    const y = (index - 1) * radius * 0.42
+
+    context.beginPath()
+    context.moveTo(-radius * 0.7, y)
+    context.lineTo(radius * 0.35 + pulse, y)
+    context.lineTo(radius * 0.12 + pulse, y - radius * 0.22)
+    context.moveTo(radius * 0.35 + pulse, y)
+    context.lineTo(radius * 0.12 + pulse, y + radius * 0.22)
+    context.stroke()
+  }
 }
 
 const drawPowerUps = (
@@ -575,6 +592,57 @@ const drawPowerUps = (
   })
 }
 
+const drawGravityWells = (
+  context: CanvasRenderingContext2D,
+  camera: Vector,
+  viewport: Vector,
+  gravityWells: GravityWell[],
+  timeSeconds: number
+) => {
+  gravityWells.forEach((gravityWell) => {
+    const screenPosition = worldToScreen(gravityWell.position, camera, viewport)
+
+    if (!isOnScreen(screenPosition, viewport, gravityWell.influenceRadius)) {
+      return
+    }
+
+    const swirl = timeSeconds * 2.8
+    const pulse = Math.sin(timeSeconds * 5) * 4
+
+    context.save()
+    context.translate(screenPosition.x, screenPosition.y)
+    context.globalCompositeOperation = "lighter"
+    context.strokeStyle = "rgba(116, 255, 224, 0.14)"
+    context.lineWidth = 1
+    context.beginPath()
+    context.arc(0, 0, gravityWell.influenceRadius, 0, Math.PI * 2)
+    context.stroke()
+
+    for (let index = 0; index < 4; index += 1) {
+      context.rotate(swirl + index * Math.PI * 0.5)
+      context.strokeStyle = index % 2 === 0
+        ? "rgba(255, 244, 166, 0.48)"
+        : "rgba(116, 255, 224, 0.38)"
+      context.lineWidth = 2
+      context.beginPath()
+      context.ellipse(0, 0, gravityWell.radius * 1.9 + pulse, gravityWell.radius * 0.52, 0, 0, Math.PI * 2)
+      context.stroke()
+    }
+
+    context.globalCompositeOperation = "source-over"
+    context.fillStyle = "#010204"
+    context.strokeStyle = "rgba(236, 248, 241, 0.32)"
+    context.shadowColor = "rgba(0, 0, 0, 0.95)"
+    context.shadowBlur = 24
+    context.lineWidth = 2
+    context.beginPath()
+    context.arc(0, 0, gravityWell.radius + pulse * 0.25, 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
+    context.restore()
+  })
+}
+
 const drawMiniMap = (
   context: CanvasRenderingContext2D,
   viewport: Vector,
@@ -584,6 +652,7 @@ const drawMiniMap = (
   asteroids: Asteroid[],
   boss: BossAsteroid | undefined,
   powerUps: PowerUp[],
+  gravityWells: GravityWell[],
   ghostMarkers: RenderGhostMarker[]
 ) => {
   const width = 164
@@ -671,6 +740,19 @@ const drawMiniMap = (
     context.beginPath()
     context.arc(markerX, markerY, 3, 0, Math.PI * 2)
     context.fill()
+  })
+
+  gravityWells.forEach((gravityWell) => {
+    const markerX = x + padding + (gravityWell.position.x / world.width) * innerWidth
+    const markerY = y + padding + (gravityWell.position.y / world.height) * innerHeight
+
+    context.fillStyle = "rgba(5, 7, 10, 0.92)"
+    context.strokeStyle = "rgba(255, 244, 166, 0.72)"
+    context.shadowBlur = 0
+    context.beginPath()
+    context.arc(markerX, markerY, 6, 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
   })
 
   ghostMarkers.forEach((marker) => {
@@ -805,6 +887,7 @@ export const renderGame = ({
   boss,
   bossCountdown,
   powerUps = [],
+  gravityWells = [],
   ghostMarkers = [],
   explosions,
   isSpectator = false,
@@ -822,6 +905,7 @@ export const renderGame = ({
     drawBoss(context, localPlayer.ship.position, viewport, boss, timeSeconds)
   }
   drawPowerUps(context, localPlayer.ship.position, viewport, powerUps, timeSeconds)
+  drawGravityWells(context, localPlayer.ship.position, viewport, gravityWells, timeSeconds)
   drawGhostMarkers(context, localPlayer.ship.position, viewport, ghostMarkers, timeSeconds)
   drawProjectiles(context, localPlayer.ship.position, viewport, projectiles)
   drawExplosions(context, localPlayer.ship.position, viewport, explosions)
@@ -869,7 +953,7 @@ export const renderGame = ({
     drawShipLabel(context, localScreenPosition, localPlayer.username, localPlayer.color)
   }
 
-  drawMiniMap(context, viewport, world, players, projectiles, asteroids, boss, powerUps, ghostMarkers)
+  drawMiniMap(context, viewport, world, players, projectiles, asteroids, boss, powerUps, gravityWells, ghostMarkers)
   drawHud(context, localPlayer.ship, localPlayer.username)
   if (isSpectator) {
     drawSpectatorBanner(context, viewport, timeSeconds)

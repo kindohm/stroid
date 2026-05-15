@@ -3,7 +3,7 @@ import { createStartingPlayerShip } from "../../game/create-starting-player-ship
 import { updateProjectiles } from "../../game/update-projectiles"
 import { updatePlayer } from "../../game/update-player"
 import { gameConfig } from "../../shared/game-config"
-import type { PlayerShip, Projectile } from "../../shared/game-types"
+import type { PlayerShip, PowerUpType, Projectile } from "../../shared/game-types"
 import type { LobbyPlayer } from "../../shared/lobby-types"
 import { createGameWorld, type RoomSettings } from "../../shared/room-settings"
 import type { AppState } from "../app/app-state"
@@ -47,6 +47,7 @@ export const startGame = (
     nextBossWindowAt: Date.now() + settings.bossIntervalMinutes * 60 * 1000,
     bossIntervalMs: settings.bossIntervalMinutes * 60 * 1000,
     powerUps: [],
+    gravityWells: [],
     powerUpEffects: [],
     settings,
     scores: createEmptyScoreState(players),
@@ -143,7 +144,7 @@ export const startGame = (
   let followedPlayerId: string | undefined = isSpectator ? initialObservedPlayerId : undefined
   let explosions: RenderExplosion[] = []
 
-  const hasPowerUpEffect = (playerId: string, type: "shield" | "scatterShot" | "asteroidFreeze") =>
+  const hasPowerUpEffect = (playerId: string, type: PowerUpType) =>
     state.activeGame?.powerUpEffects.some(
       (effect) => effect.playerId === playerId && effect.type === type && effect.expiresAt > Date.now()
     ) ?? false
@@ -293,6 +294,8 @@ export const startGame = (
       : shipsByPlayerId.get(selfId) ?? localShip
     const canControlLocalShip = !isSpectator && localShipStatus === "alive" && !state.activeGame?.isGameOver
 
+    const gravityWells = state.activeGame?.gravityWells ?? []
+
     if (canControlLocalShip) {
       updatePlayerStats({
         thrustSeconds: input.thrust ? deltaSeconds : 0,
@@ -308,7 +311,14 @@ export const startGame = (
 
       while (localSimulationAccumulator >= localSimulationStepSeconds) {
         previousLocalShip = updatedLocalShip
-        updatedLocalShip = updatePlayer(updatedLocalShip, input, localSimulationStepSeconds, world, settings.maxShipSpeed)
+        updatedLocalShip = updatePlayer(
+          updatedLocalShip,
+          input,
+          localSimulationStepSeconds,
+          world,
+          settings.maxShipSpeed,
+          gravityWells
+        )
         localSimulationAccumulator -= localSimulationStepSeconds
       }
     }
@@ -316,7 +326,7 @@ export const startGame = (
     if (!isSpectator) {
       shipsByPlayerId.set(selfId, updatedLocalShip)
     }
-    projectiles = updateProjectiles(projectiles, deltaSeconds, world)
+    projectiles = updateProjectiles(projectiles, deltaSeconds, world, gravityWells)
 
     if (state.incomingProjectiles.length > 0) {
       const nextProjectiles = state.incomingProjectiles
@@ -382,7 +392,11 @@ export const startGame = (
       })
     }
 
-    if (canControlLocalShip && input.fire && now / 1000 - lastFireTime >= gameConfig.fireCooldownSeconds) {
+    const fireCooldownSeconds = hasPowerUpEffect(selfId, "rapidFire")
+      ? gameConfig.fireCooldownSeconds / 2
+      : gameConfig.fireCooldownSeconds
+
+    if (canControlLocalShip && input.fire && now / 1000 - lastFireTime >= fireCooldownSeconds) {
       lastFireTime = now / 1000
       state.gameAudio?.playFire()
       const projectileAngles = hasPowerUpEffect(selfId, "scatterShot")
@@ -642,6 +656,7 @@ export const startGame = (
           }
         : undefined,
       powerUps,
+      gravityWells,
       ghostMarkers,
       explosions,
       isSpectator,

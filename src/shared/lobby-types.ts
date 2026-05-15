@@ -1,4 +1,4 @@
-import type { ActivePowerUpEffect, Asteroid, AsteroidSize, BossAsteroid, PowerUp, Projectile, Vector } from "./game-types"
+import type { ActivePowerUpEffect, Asteroid, AsteroidSize, BossAsteroid, GravityWell, PowerUp, Projectile, Vector } from "./game-types"
 import type { PlayerStats } from "./player-stats"
 import type { RoomSettings } from "./room-settings"
 
@@ -260,6 +260,10 @@ export type ServerLobbyMessage =
   | {
       type: "powerUpState"
       powerUps: PowerUp[]
+    }
+  | {
+      type: "gravityWellState"
+      gravityWells: GravityWell[]
     }
   | {
       type: "bossState"

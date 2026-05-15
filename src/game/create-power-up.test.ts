@@ -25,7 +25,7 @@ describe("createPowerUp", () => {
     const values = [0.1, 0.5, 0.5, 0.99, 0.5]
     const powerUp = createPowerUp("power-1", world, () => values.shift() ?? 0)
 
-    expect(powerUp.type).toBe("asteroidFreeze")
+    expect(powerUp.type).toBe("rapidFire")
     expect(powerUp.position.x).toBe(world.width)
     expect(powerUp.velocity.x).toBeLessThan(0)
   })

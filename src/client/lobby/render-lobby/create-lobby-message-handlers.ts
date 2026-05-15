@@ -152,6 +152,11 @@ export const createLobbyMessageHandlers = ({
       }
     }
   },
+  onGravityWellState: (message) => {
+    if (state.activeGame) {
+      state.activeGame.gravityWells = message.gravityWells
+    }
+  },
   onBossState: (message) => {
     if (state.activeGame) {
       state.activeGame.boss = message.boss

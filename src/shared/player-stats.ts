@@ -33,7 +33,8 @@ export const createDefaultPlayerStats = (): PlayerStats => ({
   powerUpsCollected: {
     shield: 0,
     scatterShot: 0,
-    asteroidFreeze: 0
+    asteroidFreeze: 0,
+    rapidFire: 0
   },
   bossHits: 0,
   bossDefeats: 0,
@@ -105,7 +106,7 @@ export const sanitizePlayerStats = (value: unknown): PlayerStats | undefined => 
     rotationSeconds: sanitizeCount(source.rotationSeconds),
     gamesPlayed: sanitizeCount(source.gamesPlayed),
     deathsByCause: sanitizeRecord(source.deathsByCause, ["asteroid", "friendlyProjectile", "shipCollision", "unknown"]),
-    powerUpsCollected: sanitizeRecord(source.powerUpsCollected, ["shield", "scatterShot", "asteroidFreeze"]),
+    powerUpsCollected: sanitizeRecord(source.powerUpsCollected, ["shield", "scatterShot", "asteroidFreeze", "rapidFire"]),
     bossHits: sanitizeCount(source.bossHits),
     bossDefeats: sanitizeCount(source.bossDefeats),
     asteroidHitsBySize: sanitizeRecord(source.asteroidHitsBySize, ["extraLarge", "large", "medium", "small"]),

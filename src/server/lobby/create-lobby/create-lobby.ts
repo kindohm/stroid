@@ -16,6 +16,7 @@ import { createGameWorld, defaultRoomSettings, sanitizeRoomSettings, type RoomSe
 import { asteroidNameSizeByAsteroidSize } from "../asteroid-name-size-by-asteroid-size"
 import { createLobbyAsteroids } from "../create-lobby-asteroids"
 import { createLobbyBroadcaster } from "../create-lobby-broadcaster"
+import { createLobbyGravityWells } from "../create-lobby-gravity-wells"
 import { createLobbyPowerUps } from "../create-lobby-power-ups"
 import { defaultAsteroidNames } from "../default-asteroid-names"
 import type { LobbyClient } from "../lobby-client"
@@ -149,6 +150,13 @@ export const createLobby = ({
     })
   }
 
+  const broadcastGravityWellState = () => {
+    broadcaster.sendToJoined({
+      type: "gravityWellState",
+      gravityWells: lobbyGravityWells.getGravityWells()
+    })
+  }
+
   const broadcastBossState = () => {
     broadcaster.sendToJoined({
       type: "bossState",
@@ -199,6 +207,7 @@ export const createLobby = ({
   const lobbyAsteroids = createLobbyAsteroids({
     getAsteroidNames: () => asteroidNames,
     getSettings: () => settings,
+    getGravityWells: () => lobbyGravityWells.getGravityWells(),
     isFrozen: powerUpEffects.hasActiveAsteroidFreeze,
     canSpawn: () => !bossPreSpawnActive && !bossAsteroid,
     onChanged: broadcastAsteroidState
@@ -206,6 +215,7 @@ export const createLobby = ({
 
   const lobbyPowerUps = createLobbyPowerUps({
     getSettings: () => settings,
+    getGravityWells: () => lobbyGravityWells.getGravityWells(),
     canSpawn: () => !bossPreSpawnActive && !bossAsteroid,
     onChanged: (nextPowerUps) => {
       if (powerUpEffects.expire()) {
@@ -215,6 +225,17 @@ export const createLobby = ({
       broadcaster.sendToJoined({
         type: "powerUpState",
         powerUps: nextPowerUps
+      })
+    }
+  })
+
+  const lobbyGravityWells = createLobbyGravityWells({
+    getSettings: () => settings,
+    canSpawn: () => !bossPreSpawnActive && !bossAsteroid,
+    onChanged: (nextGravityWells) => {
+      broadcaster.sendToJoined({
+        type: "gravityWellState",
+        gravityWells: nextGravityWells
       })
     }
   })
@@ -257,6 +278,10 @@ export const createLobby = ({
     sendMessage(client, {
       type: "powerUpEffectState",
       effects: powerUpEffects.getEffects()
+    })
+    sendMessage(client, {
+      type: "gravityWellState",
+      gravityWells: lobbyGravityWells.getGravityWells()
     })
     sendMessage(client, {
       type: "bossState",
@@ -338,6 +363,7 @@ export const createLobby = ({
     ghostPositionsByClientId.clear()
     asteroidStats.clear()
     powerUpEffects.clear()
+    lobbyGravityWells.reset()
     bossAsteroid = undefined
     bossPreSpawnActive = false
     bossId = 0
@@ -364,11 +390,13 @@ export const createLobby = ({
     lobbyPowerUps.reset()
     lobbyAsteroids.start()
     lobbyPowerUps.start()
+    lobbyGravityWells.start()
     startBossInterval()
     clients.forEach(sendGameStarted)
     broadcastScoreState()
     broadcastLifeState()
     broadcastPowerUpEffectState()
+    broadcastGravityWellState()
     broadcastBossState()
     onChanged?.()
   }
@@ -389,6 +417,7 @@ export const createLobby = ({
     gameInProgress = false
     lobbyAsteroids.stop()
     lobbyPowerUps.stop()
+    lobbyGravityWells.stop()
     stopBossInterval()
     recordRecapEvent({
       type: "gameOver",
@@ -618,6 +647,7 @@ export const createLobby = ({
     if (clients.size === 0) {
       lobbyAsteroids.stop()
       lobbyPowerUps.stop()
+      lobbyGravityWells.stop()
       stopBossInterval()
       onEmpty?.(slug)
     }
@@ -790,6 +820,7 @@ export const createLobby = ({
     stop: () => {
       lobbyAsteroids.stop()
       lobbyPowerUps.stop()
+      lobbyGravityWells.stop()
       stopBossInterval()
     }
   }
