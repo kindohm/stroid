@@ -28,6 +28,56 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
   const self = model.lobbyPlayers.find((player) => player.id === model.selfId)
   const allPlayersReady = model.lobbyPlayers.length > 0 && model.lobbyPlayers.every((player) => player.isReady)
   const readyCount = model.lobbyPlayers.filter((player) => player.isReady).length
+  const hostControls = isHost
+    ? `
+      <button class="start-button" type="button" ${!allPlayersReady ? "disabled" : ""}>Start</button>
+    `
+    : ""
+  const gameOptions = isHost
+    ? `
+      <section class="room-settings" aria-label="Game variant settings">
+        <div class="lobby-roster-header">
+          <span>game variants</span>
+          <button class="randomize-settings-button secondary-button" type="button" ${state.activeGame ? "disabled" : ""}>Randomize</button>
+        </div>
+        <div class="room-settings-grid">
+          <label>
+            <span>map size</span>
+            <select name="mapSize" ${state.activeGame ? "disabled" : ""}>
+              ${mapSizePresets.map((preset) => `
+                <option value="${preset.id}" ${model.roomSettings.mapSize === preset.id ? "selected" : ""}>${preset.label}</option>
+              `).join("")}
+            </select>
+          </label>
+          <label>
+            <span>asteroid density ${Math.round(model.roomSettings.asteroidDensity * 100)}%</span>
+            <input name="asteroidDensity" type="range" min="${roomSettingsBounds.asteroidDensity.min}" max="${roomSettingsBounds.asteroidDensity.max}" step="${roomSettingsBounds.asteroidDensity.step}" value="${model.roomSettings.asteroidDensity}" ${state.activeGame ? "disabled" : ""} />
+          </label>
+          <label>
+            <span>player lives</span>
+            <input name="playerLives" type="number" min="${roomSettingsBounds.playerLives.min}" max="${roomSettingsBounds.playerLives.max}" step="${roomSettingsBounds.playerLives.step}" value="${model.roomSettings.playerLives}" ${state.activeGame ? "disabled" : ""} />
+          </label>
+          <label>
+            <span>max ship speed</span>
+            <input name="maxShipSpeed" type="number" min="${roomSettingsBounds.maxShipSpeed.min}" max="${roomSettingsBounds.maxShipSpeed.max}" step="${roomSettingsBounds.maxShipSpeed.step}" value="${model.roomSettings.maxShipSpeed}" ${state.activeGame ? "disabled" : ""} />
+          </label>
+          <label>
+            <span>boss interval minutes</span>
+            <input name="bossIntervalMinutes" type="number" min="${roomSettingsBounds.bossIntervalMinutes.min}" max="${roomSettingsBounds.bossIntervalMinutes.max}" step="${roomSettingsBounds.bossIntervalMinutes.step}" value="${model.roomSettings.bossIntervalMinutes}" ${state.activeGame ? "disabled" : ""} />
+          </label>
+          <label>
+            <span>boss hp per player</span>
+            <input name="bossHealthPerPlayer" type="number" min="${roomSettingsBounds.bossHealthPerPlayer.min}" max="${roomSettingsBounds.bossHealthPerPlayer.max}" step="${roomSettingsBounds.bossHealthPerPlayer.step}" value="${model.roomSettings.bossHealthPerPlayer}" ${state.activeGame ? "disabled" : ""} />
+          </label>
+          <label class="settings-toggle">
+            <input name="friendlyFire" type="checkbox" ${model.roomSettings.friendlyFire ? "checked" : ""} ${state.activeGame ? "disabled" : ""} />
+            <span>friendly fire + collisions</span>
+          </label>
+        </div>
+      </section>
+      ${renderAsteroidEditor(model.asteroidNames)}
+    `
+    : ""
 
   renderLobbyShell({
     state,
@@ -48,55 +98,15 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
           <span>players</span>
           <span>${isHost ? "host controls" : "waiting for host"}</span>
         </div>
-        <ul class="player-list"></ul>
         <div class="room-actions">
           <button class="ready-button secondary-button" type="button" ${state.activeGame ? "disabled" : ""}>${self?.isReady ? "Unready" : "Ready"}</button>
-          <button class="start-button" type="button" ${!isHost || !allPlayersReady ? "disabled" : ""}>Start</button>
+          ${hostControls}
           <button class="leave-lobby-button secondary-button" type="button">Leave</button>
         </div>
         <p class="ready-summary">${readyCount.toLocaleString()} / ${model.lobbyPlayers.length.toLocaleString()} pilots ready</p>
+        <ul class="player-list"></ul>
       </section>
-      <section class="room-settings" aria-label="Game variant settings">
-        <div class="lobby-roster-header">
-          <span>game variants</span>
-          <button class="randomize-settings-button secondary-button" type="button" ${!isHost || state.activeGame ? "disabled" : ""}>Randomize</button>
-        </div>
-        <div class="room-settings-grid">
-          <label>
-            <span>map size</span>
-            <select name="mapSize" ${!isHost || state.activeGame ? "disabled" : ""}>
-              ${mapSizePresets.map((preset) => `
-                <option value="${preset.id}" ${model.roomSettings.mapSize === preset.id ? "selected" : ""}>${preset.label}</option>
-              `).join("")}
-            </select>
-          </label>
-          <label>
-            <span>asteroid density ${Math.round(model.roomSettings.asteroidDensity * 100)}%</span>
-            <input name="asteroidDensity" type="range" min="${roomSettingsBounds.asteroidDensity.min}" max="${roomSettingsBounds.asteroidDensity.max}" step="${roomSettingsBounds.asteroidDensity.step}" value="${model.roomSettings.asteroidDensity}" ${!isHost || state.activeGame ? "disabled" : ""} />
-          </label>
-          <label>
-            <span>player lives</span>
-            <input name="playerLives" type="number" min="${roomSettingsBounds.playerLives.min}" max="${roomSettingsBounds.playerLives.max}" step="${roomSettingsBounds.playerLives.step}" value="${model.roomSettings.playerLives}" ${!isHost || state.activeGame ? "disabled" : ""} />
-          </label>
-          <label>
-            <span>max ship speed</span>
-            <input name="maxShipSpeed" type="number" min="${roomSettingsBounds.maxShipSpeed.min}" max="${roomSettingsBounds.maxShipSpeed.max}" step="${roomSettingsBounds.maxShipSpeed.step}" value="${model.roomSettings.maxShipSpeed}" ${!isHost || state.activeGame ? "disabled" : ""} />
-          </label>
-          <label>
-            <span>boss interval minutes</span>
-            <input name="bossIntervalMinutes" type="number" min="${roomSettingsBounds.bossIntervalMinutes.min}" max="${roomSettingsBounds.bossIntervalMinutes.max}" step="${roomSettingsBounds.bossIntervalMinutes.step}" value="${model.roomSettings.bossIntervalMinutes}" ${!isHost || state.activeGame ? "disabled" : ""} />
-          </label>
-          <label>
-            <span>boss hp per player</span>
-            <input name="bossHealthPerPlayer" type="number" min="${roomSettingsBounds.bossHealthPerPlayer.min}" max="${roomSettingsBounds.bossHealthPerPlayer.max}" step="${roomSettingsBounds.bossHealthPerPlayer.step}" value="${model.roomSettings.bossHealthPerPlayer}" ${!isHost || state.activeGame ? "disabled" : ""} />
-          </label>
-          <label class="settings-toggle">
-            <input name="friendlyFire" type="checkbox" ${model.roomSettings.friendlyFire ? "checked" : ""} ${!isHost || state.activeGame ? "disabled" : ""} />
-            <span>friendly fire + collisions</span>
-          </label>
-        </div>
-      </section>
-      ${renderAsteroidEditor(model.asteroidNames)}
+      ${gameOptions}
     `
   })
 
@@ -113,13 +123,9 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
   if (
     !playerList ||
     !readyButton ||
-    !startButton ||
     !leaveButton ||
     !shareInput ||
-    !copyInviteButton ||
-    !roomSettingsElement ||
-    !randomizeSettingsButton ||
-    !asteroidNameEditor
+    !copyInviteButton
   ) {
     throw new Error("Room failed to render")
   }
@@ -167,27 +173,38 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
     copyInviteButton.disabled = false
   })
 
-  const sendRoomSettings = () => {
-    if (!isHost || state.activeGame) {
+  if (isHost && roomSettingsElement && randomizeSettingsButton && asteroidNameEditor) {
+    const sendRoomSettings = () => {
+      if (state.activeGame) {
+        return
+      }
+
+      model.roomSettings = getRoomSettingsFromElement(roomSettingsElement, model.roomSettings)
+      state.lobbyConnection?.setRoomSettings(model.roomSettings)
+      render()
+    }
+
+    roomSettingsElement.addEventListener("change", sendRoomSettings)
+    roomSettingsElement.querySelector<HTMLInputElement>("input[name='asteroidDensity']")?.addEventListener("input", sendRoomSettings)
+    randomizeSettingsButton.addEventListener("click", () => {
+      model.roomSettings = createRandomRoomSettings()
+      state.lobbyConnection?.setRoomSettings(model.roomSettings)
+      render()
+    })
+    asteroidNameEditor.addEventListener("change", () => {
+      model.asteroidNames = parseAsteroidNameInputs(asteroidNameEditor)
+      saveStoredAsteroidNames(model.asteroidNames)
+      state.lobbyConnection?.setAsteroidNames(model.asteroidNames)
+      render()
+    })
+  }
+
+  startButton?.addEventListener("click", () => {
+    if (!allPlayersReady) {
       return
     }
 
-    model.roomSettings = getRoomSettingsFromElement(roomSettingsElement, model.roomSettings)
-    state.lobbyConnection?.setRoomSettings(model.roomSettings)
-    render()
-  }
-
-  roomSettingsElement.addEventListener("change", sendRoomSettings)
-  roomSettingsElement.querySelector<HTMLInputElement>("input[name='asteroidDensity']")?.addEventListener("input", sendRoomSettings)
-  randomizeSettingsButton.addEventListener("click", () => {
-    model.roomSettings = createRandomRoomSettings()
-    state.lobbyConnection?.setRoomSettings(model.roomSettings)
-    render()
-  })
-  startButton.addEventListener("click", () => {
-    if (isHost && allPlayersReady) {
-      state.lobbyConnection?.startGame()
-    }
+    state.lobbyConnection?.startGame()
   })
   readyButton.addEventListener("click", () => {
     state.lobbyConnection?.setReady(!(self?.isReady ?? false))
@@ -199,12 +216,6 @@ export const renderRoom = ({ model, render, state }: RenderRoomArgs) => {
     state.currentLobbyHostId = ""
     model.view = "browser"
     state.lobbyConnection?.listLobbies()
-    render()
-  })
-  asteroidNameEditor.addEventListener("change", () => {
-    model.asteroidNames = parseAsteroidNameInputs(asteroidNameEditor)
-    saveStoredAsteroidNames(model.asteroidNames)
-    state.lobbyConnection?.setAsteroidNames(model.asteroidNames)
     render()
   })
 }

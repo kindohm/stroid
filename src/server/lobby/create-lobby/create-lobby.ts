@@ -676,7 +676,7 @@ export const createLobby = ({
     }
 
     if (message.type === "setAsteroidNames") {
-      if (isActivePlayer(client) && !gameInProgress) {
+      if (client.id === hostClientId && isActivePlayer(client) && !gameInProgress) {
         asteroidNames = message.asteroidNames
         broadcastLobbyState()
       }

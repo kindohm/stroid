@@ -581,6 +581,51 @@ describe("createLobby", () => {
     expect(latest?.asteroidNames?.large).toEqual(["First Large"])
   })
 
+  it("only lets the host update asteroid names", () => {
+    const lobby = createLobby()
+    const host = createSocket()
+    const guest = createSocket()
+
+    lobby.addClient(host as never)
+    lobby.addClient(guest as never)
+
+    host.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    guest.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
+    guest.listeners.get("message")?.(JSON.stringify({
+      type: "setAsteroidNames",
+      asteroidNames: {
+        extraLarge: ["Guest XL"],
+        large: ["Guest Large"],
+        medium: ["Guest Medium"],
+        small: ["Guest Small"]
+      }
+    }))
+
+    const afterGuestUpdate = host.sent
+      .map((message) => JSON.parse(message) as { type: string; asteroidNames?: { large: string[] } })
+      .filter((message) => message.type === "lobbyState")
+      .at(-1)
+
+    expect(afterGuestUpdate?.asteroidNames?.large).not.toEqual(["Guest Large"])
+
+    host.listeners.get("message")?.(JSON.stringify({
+      type: "setAsteroidNames",
+      asteroidNames: {
+        extraLarge: ["Host XL"],
+        large: ["Host Large"],
+        medium: ["Host Medium"],
+        small: ["Host Small"]
+      }
+    }))
+
+    const afterHostUpdate = host.sent
+      .map((message) => JSON.parse(message) as { type: string; asteroidNames?: { large: string[] } })
+      .filter((message) => message.type === "lobbyState")
+      .at(-1)
+
+    expect(afterHostUpdate?.asteroidNames?.large).toEqual(["Host Large"])
+  })
+
   it("includes destroyed asteroid name counts in the game over payload", () => {
     const lobby = createLobby()
     const socket = createSocket()
