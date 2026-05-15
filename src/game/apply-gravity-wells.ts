@@ -20,7 +20,8 @@ export const applyGravityWells = (
     const edgeAcceleration = gravityWell.strength / gravityWell.influenceRadius ** 2
     const inverseSquareAcceleration = gravityWell.strength / falloffDistance ** 2
     const falloffRatio = 1 - distance / gravityWell.influenceRadius
-    const broadPullAcceleration = edgeAcceleration * (1 + falloffRatio * 1.5)
+    const broadPullAcceleration =
+      edgeAcceleration * gameConfig.gravityWellBroadPullMultiplier * (1 + falloffRatio * 1.5)
     const acceleration = Math.min(
       gameConfig.gravityWellMaxAcceleration,
       inverseSquareAcceleration + broadPullAcceleration

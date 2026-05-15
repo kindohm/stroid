@@ -24,6 +24,7 @@ export const gameConfig = {
   gravityWellRadius: 44,
   gravityWellInfluenceRadius: 520,
   gravityWellStrength: 2_200_000,
+  gravityWellBroadPullMultiplier: 7,
   gravityWellMaxAcceleration: 900,
   gravityWellSpawnIntervalMs: 20_000,
   gravityWellMaxActive: 1,

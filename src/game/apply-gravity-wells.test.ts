@@ -27,7 +27,7 @@ describe("applyGravityWells", () => {
       1
     )
 
-    expect(velocity.x).toBeGreaterThan(8)
+    expect(velocity.x).toBeGreaterThan(60)
   })
 
   it("ignores objects outside the influence radius", () => {
