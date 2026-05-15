@@ -292,6 +292,130 @@ describe("createLobby", () => {
     lobby.stop()
   })
 
+  it("creates a ghost marker when a player is eliminated and revives them with one life", () => {
+    const lobby = createLobby()
+    const first = createSocket()
+    const second = createSocket()
+
+    lobby.addClient(first as never)
+    lobby.addClient(second as never)
+
+    first.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    second.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
+    startReadyGame(first, [second])
+    first.listeners.get("message")?.(playerHitMessage)
+    first.listeners.get("message")?.(playerHitMessage)
+    first.listeners.get("message")?.(playerHitMessage)
+
+    const eliminatedLifeState = first.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        lives?: {
+          players: Array<{
+            id: string
+            username: string
+            lives: number
+            isEliminated: boolean
+            ghostPosition?: { x: number; y: number }
+          }>
+        }
+      })
+      .filter((message) => message.type === "lifeState")
+      .at(-1)
+
+    expect(eliminatedLifeState?.lives?.players.find((player) => player.username === "mike")).toEqual(
+      expect.objectContaining({
+        lives: 0,
+        isEliminated: true,
+        ghostPosition: { x: 120, y: 140 }
+      })
+    )
+
+    const eliminatedPlayerId = eliminatedLifeState?.lives?.players.find((player) => player.username === "mike")?.id
+
+    second.listeners.get("message")?.(JSON.stringify({ type: "revivePlayer", playerId: eliminatedPlayerId }))
+
+    const revivedLifeState = first.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        lives?: {
+          players: Array<{
+            username: string
+            lives: number
+            isEliminated: boolean
+            ghostPosition?: { x: number; y: number }
+          }>
+        }
+      })
+      .filter((message) => message.type === "lifeState")
+      .at(-1)
+
+    const revivedPlayer = revivedLifeState?.lives?.players.find((player) => player.username === "mike")
+
+    expect(revivedPlayer).toEqual(
+      expect.objectContaining({
+        lives: 1,
+        isEliminated: false
+      })
+    )
+    expect(revivedPlayer).not.toHaveProperty("ghostPosition")
+    lobby.stop()
+  })
+
+  it("does not let players revive themselves", () => {
+    const lobby = createLobby()
+    const first = createSocket()
+    const second = createSocket()
+
+    lobby.addClient(first as never)
+    lobby.addClient(second as never)
+
+    first.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "mike" }))
+    second.listeners.get("message")?.(JSON.stringify({ type: "joinLobby", username: "zoe" }))
+    startReadyGame(first, [second])
+    first.listeners.get("message")?.(playerHitMessage)
+    first.listeners.get("message")?.(playerHitMessage)
+    first.listeners.get("message")?.(playerHitMessage)
+
+    const eliminatedLifeState = first.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        lives?: {
+          players: Array<{
+            id: string
+            username: string
+          }>
+        }
+      })
+      .filter((message) => message.type === "lifeState")
+      .at(-1)
+    const eliminatedPlayerId = eliminatedLifeState?.lives?.players.find((player) => player.username === "mike")?.id
+
+    first.listeners.get("message")?.(JSON.stringify({ type: "revivePlayer", playerId: eliminatedPlayerId }))
+
+    const latestLifeState = first.sent
+      .map((message) => JSON.parse(message) as {
+        type: string
+        lives?: {
+          players: Array<{
+            username: string
+            lives: number
+            isEliminated: boolean
+          }>
+        }
+      })
+      .filter((message) => message.type === "lifeState")
+      .at(-1)
+
+    expect(latestLifeState?.lives?.players.find((player) => player.username === "mike")).toEqual(
+      expect.objectContaining({
+        lives: 0,
+        isEliminated: true
+      })
+    )
+    lobby.stop()
+  })
+
   it("relays fired projectiles to other players", () => {
     const lobby = createLobby()
     const first = createSocket()

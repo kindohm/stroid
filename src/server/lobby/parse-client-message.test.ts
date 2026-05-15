@@ -57,4 +57,14 @@ describe("parseClientMessage", () => {
       bossId: "boss-1"
     })
   })
+
+  it("parses revive player messages", () => {
+    expect(parseClientMessage(Buffer.from(JSON.stringify({
+      type: "revivePlayer",
+      playerId: "player-1"
+    })))).toEqual({
+      type: "revivePlayer",
+      playerId: "player-1"
+    })
+  })
 })

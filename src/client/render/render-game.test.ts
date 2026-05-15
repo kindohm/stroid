@@ -369,4 +369,32 @@ describe("renderGame", () => {
 
     expect(context.operations.filter((operation) => operation === "arc").length).toBeGreaterThan(2)
   })
+
+  it("draws revive ghost markers", () => {
+    const context = createContextStub()
+
+    renderGame({
+      context,
+      viewport,
+      world,
+      localPlayer: renderPlayer,
+      players: [renderPlayer],
+      projectiles: [],
+      asteroids: [],
+      ghostMarkers: [
+        {
+          username: "zoe",
+          position: {
+            x: player.position.x + 80,
+            y: player.position.y
+          },
+          color: "#ff7a90"
+        }
+      ],
+      explosions: [],
+      timeSeconds: 1
+    })
+
+    expect(context.operations).toContain("fillText:revive zoe")
+  })
 })

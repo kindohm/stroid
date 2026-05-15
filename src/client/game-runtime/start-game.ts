@@ -8,7 +8,7 @@ import type { LobbyPlayer } from "../../shared/lobby-types"
 import { createGameWorld, type RoomSettings } from "../../shared/room-settings"
 import type { AppState } from "../app/app-state"
 import { createKeyboardInput } from "../input/create-keyboard-input"
-import { renderGame, type RenderExplosion } from "../render/render-game"
+import { renderGame, type RenderExplosion, type RenderGhostMarker } from "../render/render-game"
 import { createGameAudio } from "../audio/create-game-audio"
 import { renderAudioControls } from "../audio/render-audio-controls"
 import { isRenderPlayerVisible } from "./is-render-player-visible"
@@ -121,6 +121,7 @@ export const startGame = (
   let projectileId = 0
   let lastTime = performance.now()
   let localSimulationAccumulator = 0
+  const pendingRevivePlayerIds = new Set<string>()
   const localSimulationStepSeconds = 1 / 120
   let lastPlayerStateSent = 0
   state.keyboard = createKeyboardInput(window)
@@ -270,6 +271,10 @@ export const startGame = (
 
       if (serverLife.isEliminated) {
         localShipStatus = "eliminated"
+      } else if (localShipStatus === "eliminated") {
+        localShipStatus = "destroyed"
+        respawnAt = now
+        followedPlayerId = undefined
       }
     }
 
@@ -338,7 +343,26 @@ export const startGame = (
     const asteroids = state.activeGame?.asteroids ?? []
     const boss = state.activeGame?.boss
     const powerUps = state.activeGame?.powerUps ?? []
+    const ghostMarkers: RenderGhostMarker[] = (state.activeGame?.lives.players ?? [])
+      .filter((player) => player.isEliminated && player.ghostPosition)
+      .map((player) => ({
+        username: player.username,
+        position: player.ghostPosition ?? { x: 0, y: 0 },
+        color: player.color
+      }))
     syncShips(gamePlayers)
+
+    const activeGhostPlayerIds = new Set(
+      (state.activeGame?.lives.players ?? [])
+        .filter((player) => player.isEliminated && player.ghostPosition)
+        .map((player) => player.id)
+    )
+
+    pendingRevivePlayerIds.forEach((playerId) => {
+      if (!activeGhostPlayerIds.has(playerId)) {
+        pendingRevivePlayerIds.delete(playerId)
+      }
+    })
 
     state.activeGame?.remoteTargets.forEach((ship, playerId) => {
       const currentShip = shipsByPlayerId.get(playerId)
@@ -525,6 +549,30 @@ export const startGame = (
       }
     }
 
+    if (canControlLocalShip) {
+      const ghostLives = state.activeGame?.lives.players ?? []
+
+      ghostLives
+        .filter((player) => player.id !== selfId && player.isEliminated && player.ghostPosition)
+        .forEach((player) => {
+          const ghostPosition = player.ghostPosition
+
+          if (!ghostPosition || pendingRevivePlayerIds.has(player.id)) {
+            return
+          }
+
+          if (
+            Math.hypot(
+              updatedLocalShip.position.x - ghostPosition.x,
+              updatedLocalShip.position.y - ghostPosition.y
+            ) <= gameConfig.shipRadius + 40
+          ) {
+            pendingRevivePlayerIds.add(player.id)
+            state.lobbyConnection?.sendRevivePlayer(player.id)
+          }
+        })
+    }
+
     state.gameAudio?.setThrusting(canControlLocalShip && input.thrust)
 
     if (localShipStatus === "eliminated" || isSpectator) {
@@ -594,6 +642,7 @@ export const startGame = (
           }
         : undefined,
       powerUps,
+      ghostMarkers,
       explosions,
       isSpectator,
       timeSeconds: now / 1000

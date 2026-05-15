@@ -24,4 +24,27 @@ describe("createLifeState", () => {
       isEliminated: true
     })
   })
+
+  it("adds ghost position only for eliminated players", () => {
+    const ghostPosition = { x: 120, y: 140 }
+
+    expect(createLifeState(
+      [player],
+      new Map([["mike", 0]]),
+      3,
+      new Map([["mike", ghostPosition]])
+    ).players[0]).toEqual({
+      ...player,
+      lives: 0,
+      isEliminated: true,
+      ghostPosition
+    })
+
+    expect(createLifeState(
+      [player],
+      new Map([["mike", 1]]),
+      3,
+      new Map([["mike", ghostPosition]])
+    ).players[0].ghostPosition).toBeUndefined()
+  })
 })

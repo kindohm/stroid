@@ -79,6 +79,13 @@ export const parseClientMessage = (data: WebSocket.RawData): ClientLobbyMessage 
       }
     }
 
+    if (message.type === "revivePlayer" && typeof message.playerId === "string") {
+      return {
+        type: "revivePlayer",
+        playerId: message.playerId
+      }
+    }
+
     if (message.type === "projectileFired" && typeof message.projectile === "object" && message.projectile) {
       return {
         type: "projectileFired",

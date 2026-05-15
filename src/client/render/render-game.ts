@@ -17,6 +17,12 @@ export type RenderExplosion = {
   ageSeconds: number
 }
 
+export type RenderGhostMarker = {
+  username: string
+  position: Vector
+  color: string
+}
+
 type RenderGameArgs = {
   context: CanvasRenderingContext2D
   viewport: Vector
@@ -33,6 +39,7 @@ type RenderGameArgs = {
     now: number
   }
   powerUps?: PowerUp[]
+  ghostMarkers?: RenderGhostMarker[]
   explosions: RenderExplosion[]
   isSpectator?: boolean
   timeSeconds: number
@@ -222,6 +229,48 @@ const drawGhostBubble = (
   context.fill()
   context.stroke()
   context.restore()
+}
+
+const drawGhostMarkers = (
+  context: CanvasRenderingContext2D,
+  camera: Vector,
+  viewport: Vector,
+  ghostMarkers: RenderGhostMarker[],
+  timeSeconds: number
+) => {
+  ghostMarkers.forEach((marker) => {
+    const screenPosition = worldToScreen(marker.position, camera, viewport)
+
+    if (!isOnScreen(screenPosition, viewport, 80)) {
+      return
+    }
+
+    const pulse = Math.sin(timeSeconds * 5) * 5
+
+    context.save()
+    context.globalAlpha = 0.78
+    context.strokeStyle = marker.color
+    context.fillStyle = "rgba(236, 248, 241, 0.05)"
+    context.lineWidth = 2
+    context.shadowColor = marker.color
+    context.shadowBlur = 22
+    context.beginPath()
+    context.arc(screenPosition.x, screenPosition.y, gameConfig.shipRadius + 24 + pulse, 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
+    context.beginPath()
+    context.moveTo(screenPosition.x - 16, screenPosition.y)
+    context.lineTo(screenPosition.x + 16, screenPosition.y)
+    context.moveTo(screenPosition.x, screenPosition.y - 16)
+    context.lineTo(screenPosition.x, screenPosition.y + 16)
+    context.stroke()
+    context.restore()
+
+    drawShipLabel(context, {
+      x: screenPosition.x,
+      y: screenPosition.y - 8
+    }, `revive ${marker.username}`, marker.color)
+  })
 }
 
 const drawExplosions = (
@@ -534,7 +583,8 @@ const drawMiniMap = (
   projectiles: Projectile[],
   asteroids: Asteroid[],
   boss: BossAsteroid | undefined,
-  powerUps: PowerUp[]
+  powerUps: PowerUp[],
+  ghostMarkers: RenderGhostMarker[]
 ) => {
   const width = 164
   const height = 164
@@ -621,6 +671,17 @@ const drawMiniMap = (
     context.beginPath()
     context.arc(markerX, markerY, 3, 0, Math.PI * 2)
     context.fill()
+  })
+
+  ghostMarkers.forEach((marker) => {
+    const markerX = x + padding + (marker.position.x / world.width) * innerWidth
+    const markerY = y + padding + (marker.position.y / world.height) * innerHeight
+
+    context.strokeStyle = marker.color
+    context.shadowBlur = 0
+    context.beginPath()
+    context.arc(markerX, markerY, 6, 0, Math.PI * 2)
+    context.stroke()
   })
 
   context.restore()
@@ -744,6 +805,7 @@ export const renderGame = ({
   boss,
   bossCountdown,
   powerUps = [],
+  ghostMarkers = [],
   explosions,
   isSpectator = false,
   timeSeconds
@@ -760,6 +822,7 @@ export const renderGame = ({
     drawBoss(context, localPlayer.ship.position, viewport, boss, timeSeconds)
   }
   drawPowerUps(context, localPlayer.ship.position, viewport, powerUps, timeSeconds)
+  drawGhostMarkers(context, localPlayer.ship.position, viewport, ghostMarkers, timeSeconds)
   drawProjectiles(context, localPlayer.ship.position, viewport, projectiles)
   drawExplosions(context, localPlayer.ship.position, viewport, explosions)
 
@@ -806,7 +869,7 @@ export const renderGame = ({
     drawShipLabel(context, localScreenPosition, localPlayer.username, localPlayer.color)
   }
 
-  drawMiniMap(context, viewport, world, players, projectiles, asteroids, boss, powerUps)
+  drawMiniMap(context, viewport, world, players, projectiles, asteroids, boss, powerUps, ghostMarkers)
   drawHud(context, localPlayer.ship, localPlayer.username)
   if (isSpectator) {
     drawSpectatorBanner(context, viewport, timeSeconds)

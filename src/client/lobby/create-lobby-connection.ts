@@ -556,6 +556,14 @@ export const createLobbyConnection = ({
 
       socket.send(JSON.stringify(message))
     },
+    sendRevivePlayer: (playerId: string) => {
+      const message: ClientLobbyMessage = {
+        type: "revivePlayer",
+        playerId
+      }
+
+      socket.send(JSON.stringify(message))
+    },
     setAsteroidNames: (asteroidNames: AsteroidNamePools) => {
       const message: ClientLobbyMessage = {
         type: "setAsteroidNames",

@@ -35,6 +35,7 @@ export type ScoreState = {
 export type PlayerLife = LobbyPlayer & {
   lives: number
   isEliminated: boolean
+  ghostPosition?: Vector
 }
 
 export type PlayerDeathCause = "asteroid" | "friendlyProjectile" | "shipCollision" | "unknown"
@@ -183,6 +184,10 @@ export type ClientLobbyMessage =
       type: "playerHit"
       ship: NetworkPlayerShip
       cause?: PlayerDeathCause
+    }
+  | {
+      type: "revivePlayer"
+      playerId: string
     }
   | {
       type: "projectileFired"

@@ -24,7 +24,8 @@ export const updateActiveGameFromLobbyState = (state: AppState, model: LobbyRend
     players: model.lobbyPlayers.map((player) => ({
       ...player,
       lives: getLife(state.activeGame?.lives, player.id)?.lives ?? model.roomSettings.playerLives,
-      isEliminated: getLife(state.activeGame?.lives, player.id)?.isEliminated ?? false
+      isEliminated: getLife(state.activeGame?.lives, player.id)?.isEliminated ?? false,
+      ghostPosition: getLife(state.activeGame?.lives, player.id)?.ghostPosition
     }))
   }
   state.activeGame.settings = model.roomSettings

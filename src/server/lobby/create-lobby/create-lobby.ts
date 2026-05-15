@@ -48,6 +48,7 @@ export const createLobby = ({
   const broadcaster = createLobbyBroadcaster({ clients })
   const scoresByClientId = new Map<string, number>()
   const livesByClientId = new Map<string, number>()
+  const ghostPositionsByClientId = new Map<string, { x: number; y: number }>()
   const asteroidStats = createAsteroidStatsTracker()
   const powerUpEffects = createPowerUpEffectStore()
   let hostClientId = hostId
@@ -90,7 +91,7 @@ export const createLobby = ({
 
   const getScoreState = () => createScoreState(getPlayers(), scoresByClientId)
 
-  const getLifeState = () => createLifeState(getPlayers(), livesByClientId, settings.playerLives)
+  const getLifeState = () => createLifeState(getPlayers(), livesByClientId, settings.playerLives, ghostPositionsByClientId)
 
   const getElapsedSeconds = () => Math.max(0, (Date.now() - gameStartedAt) / 1000)
 
@@ -334,6 +335,7 @@ export const createLobby = ({
 
     scoresByClientId.clear()
     livesByClientId.clear()
+    ghostPositionsByClientId.clear()
     asteroidStats.clear()
     powerUpEffects.clear()
     bossAsteroid = undefined
@@ -420,6 +422,9 @@ export const createLobby = ({
     const player = getPlayers().find((nextPlayer) => nextPlayer.id === client.id)
 
     livesByClientId.set(client.id, nextLives)
+    if (nextLives <= 0) {
+      ghostPositionsByClientId.set(client.id, ship.position)
+    }
     broadcastPlayerDestroyed(client, ship)
 
     if (player) {
@@ -438,6 +443,24 @@ export const createLobby = ({
     if (players.length > 0 && players.every((nextPlayer) => nextPlayer.isEliminated)) {
       endGame()
     }
+  }
+
+  const handleRevivePlayer = (client: LobbyClient, playerId: string) => {
+    if (!isActivePlayer(client) || !gameInProgress || gameOver || client.id === playerId) {
+      return
+    }
+
+    if ((livesByClientId.get(client.id) ?? settings.playerLives) <= 0) {
+      return
+    }
+
+    if ((livesByClientId.get(playerId) ?? settings.playerLives) > 0 || !ghostPositionsByClientId.has(playerId)) {
+      return
+    }
+
+    livesByClientId.set(playerId, 1)
+    ghostPositionsByClientId.delete(playerId)
+    broadcastLifeState()
   }
 
   const handleAsteroidHit = (client: LobbyClient, asteroidIdToHit: string) => {
@@ -680,6 +703,11 @@ export const createLobby = ({
 
     if (message.type === "playerHit") {
       handlePlayerHit(client, message.ship, message.cause)
+      return
+    }
+
+    if (message.type === "revivePlayer") {
+      handleRevivePlayer(client, message.playerId)
       return
     }
 
